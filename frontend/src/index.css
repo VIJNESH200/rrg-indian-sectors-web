@@ -102,7 +102,7 @@
   /* ── Sector table ── */
   .sec-table { @apply w-full border-collapse text-[12px]; }
   .sec-table th {
-    @apply text-left px-4 py-2.5 stat-label border-b;
+    @apply px-4 py-2.5 stat-label border-b;
     border-color: var(--border);
     background: var(--bg-raised);
   }
