@@ -40,21 +40,22 @@
 
   /* ── Icon-style transport button ── */
   .btn-icon {
-    @apply w-8 h-8 flex items-center justify-center rounded-md text-slate-500 cursor-pointer;
-    background: transparent;
-    border: 1px solid transparent;
+    @apply w-8 h-8 flex items-center justify-center rounded-md text-white font-bold cursor-pointer;
+    background: var(--bg-raised);
+    border: 1px solid rgba(255, 255, 255, 0.15);
     transition: all 0.15s ease;
   }
   .btn-icon:hover {
     @apply text-white;
-    background: var(--bg-raised);
-    border-color: var(--border-md);
+    background: var(--bg-hover);
+    border-color: rgba(255, 255, 255, 0.3);
+    box-shadow: 0 0 10px rgba(255, 255, 255, 0.1);
   }
   .btn-icon.active {
-    color: var(--accent);
-    background: var(--accent-dim);
-    border-color: rgba(59,139,255,0.35);
-    box-shadow: 0 0 8px rgba(59,139,255,0.15);
+    color: #FFFFFF;
+    background: #3B8BFF;
+    border-color: #60A5FA;
+    box-shadow: 0 0 12px rgba(59, 139, 255, 0.4);
   }
 
   /* ── Small pill buttons ── */

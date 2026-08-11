@@ -57,21 +57,21 @@ export const TimelineControls: React.FC<TimelineControlsProps> = ({
         style={{ borderBottom: "1px solid var(--border)" }}
       >
         {/* Transport */}
-        <div className="flex items-center gap-0.5">
+        <div className="flex items-center gap-1">
           <button className="btn-icon" onClick={() => { setPlaying(false); onIndexChange(0); }} title="Reset">
-            <RotateCcw className="w-3.5 h-3.5" />
+            <RotateCcw className="w-4 h-4 text-white" strokeWidth={2.5} />
           </button>
           <button className="btn-icon" onClick={stepBack} title="Step back">
-            <SkipBack className="w-3.5 h-3.5" />
+            <SkipBack className="w-4 h-4 text-white" strokeWidth={2.5} />
           </button>
-          <button className={`btn-icon ${playing ? "active" : ""}`} onClick={() => setPlaying(p => !p)}>
-            {playing ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
+          <button className={`btn-icon ${playing ? "active" : ""}`} onClick={() => setPlaying(p => !p)} title={playing ? "Pause" : "Play"}>
+            {playing ? <Pause className="w-4 h-4 text-white" strokeWidth={2.5} /> : <Play className="w-4 h-4 text-white" strokeWidth={2.5} />}
           </button>
           <button className="btn-icon" onClick={stepFwd} title="Step forward">
-            <SkipForward className="w-3.5 h-3.5" />
+            <SkipForward className="w-4 h-4 text-white" strokeWidth={2.5} />
           </button>
           <button className="btn-icon" onClick={goLast} title="Go to latest">
-            <ChevronLast className="w-3.5 h-3.5" />
+            <ChevronLast className="w-4 h-4 text-white" strokeWidth={2.5} />
           </button>
         </div>
 

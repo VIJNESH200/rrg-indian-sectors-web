@@ -172,9 +172,9 @@ export const RRGChartCanvas: React.FC<RRGChartProps> = ({
     ctx.lineWidth = 1;
     ctx.strokeRect(PL, PT, PW, PH);
 
-    /* ── 4. Axis ticks & labels ── */
-    ctx.fillStyle = "#4B5568";
-    ctx.font = "10px 'JetBrains Mono', monospace";
+    /* ── 4. Axis ticks & labels (bold, high-contrast) ── */
+    ctx.fillStyle = "#E2E8F0";
+    ctx.font = "700 11px 'JetBrains Mono', monospace";
     ctx.textAlign = "center";
     ctx.textBaseline = "top";
     for (let i = 0; i <= gridStepsX; i++) {
@@ -188,8 +188,8 @@ export const RRGChartCanvas: React.FC<RRGChartProps> = ({
       ctx.fillText(v.toFixed(1), PL - 8, toY(v));
     }
 
-    ctx.fillStyle = "#6B7280";
-    ctx.font = "11px Inter, sans-serif";
+    ctx.fillStyle = "#FFFFFF";
+    ctx.font = "700 12px Inter, sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "bottom";
     ctx.fillText("RS-Ratio (Relative Strength)", PL + PW / 2, H - 4);
