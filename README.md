@@ -39,7 +39,7 @@ flowchart TD
     end
 
     UI -->|GET /api/rrg-data| Worker
-    Fetcher -->|v8/finance/chart/{ticker}| YF
+    Fetcher -->|"v8/finance/chart/:ticker"| YF
 ```
 
 ---
