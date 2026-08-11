@@ -14,16 +14,10 @@ const SECTOR_COLORS: Record<string, string> = {
   "^CNXMEDIA":          "#F97316",
   "^CNXPSUBANK":        "#14B8A6",
   "NIFTY_PVT_BANK.NS":  "#60A5FA",
-  "^CNXCONSUM":         "#EAB308",
   "^CNXENERGY":         "#EF4444",
   "^CNXREALTY":         "#84CC16",
   "^CNXINFRA":          "#A855F7",
   "^CNXSERVICE":        "#F43F5E",
-  "^CNXMNC":            "#F472B6",
-  "^CNX100":            "#38BDF8",
-  "^CNX200":            "#818CF8",
-  "^CRSLDX":            "#FB7185",
-  "NIFTY_MIDCAP_100.NS": "#34D399",
 };
 const FALLBACK = ["#3B8BFF","#10B981","#F59E0B","#EC4899","#A78BFA","#22D3EE","#6366F1","#F97316","#14B8A6","#84CC16"];
 
