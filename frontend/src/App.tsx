@@ -36,6 +36,7 @@ export function App() {
           "NIFTY_PVT_BANK.NS",
           "^CNXSERVICE",
           "^CNXINFRA",
+          "^CNXENERGY",
         ]);
         setVisible(new Set(j.sectors.filter((s) => !DEFAULT_OFF_SECTORS.has(s))));
       }
