@@ -29,7 +29,15 @@ export function App() {
       const j: RrgResponseData = await r.json();
       setData(j);
       if (j.dates?.length)   setDateIdx(j.dates.length - 1);
-      if (j.sectors?.length) setVisible(new Set(j.sectors));
+      if (j.sectors?.length) {
+        const DEFAULT_OFF_SECTORS = new Set([
+          "NIFTY_FIN_SERVICE.NS",
+          "^CNXPSUBANK",
+          "NIFTY_PVT_BANK.NS",
+          "^CNXSERVICE",
+        ]);
+        setVisible(new Set(j.sectors.filter((s) => !DEFAULT_OFF_SECTORS.has(s))));
+      }
     } catch (e: any) {
       setError(e.message);
     } finally {
