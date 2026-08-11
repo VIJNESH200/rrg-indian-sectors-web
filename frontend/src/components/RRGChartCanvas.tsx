@@ -111,11 +111,11 @@ export const RRGChartCanvas: React.FC<RRGChartProps> = ({
 
     /* ── 1. Quadrant fills (very subtle — matches macro-intelligence charcoal glows) ── */
     const fills: [number, number, number, number, string][] = [
-      // x, y, w, h, color
-      [cx100, PT,      PL + PW - cx100, cy100 - PT,      "rgba(34,197,94,0.055)"],   // LEADING   top-right
-      [cx100, cy100,   PL + PW - cx100, PT + PH - cy100, "rgba(251,146,60,0.055)"],  // WEAKENING bottom-right
-      [PL,    cy100,   cx100 - PL,      PT + PH - cy100, "rgba(239,68,68,0.055)"],   // LAGGING   bottom-left
-      [PL,    PT,      cx100 - PL,      cy100 - PT,      "rgba(59,139,255,0.055)"],  // IMPROVING top-left
+      // x, y, w, h, color — warmer, more visible zones
+      [cx100, PT,      PL + PW - cx100, cy100 - PT,      "rgba(34,197,94,0.09)"],   // LEADING   top-right
+      [cx100, cy100,   PL + PW - cx100, PT + PH - cy100, "rgba(251,146,60,0.09)"],  // WEAKENING bottom-right
+      [PL,    cy100,   cx100 - PL,      PT + PH - cy100, "rgba(239,68,68,0.09)"],   // LAGGING   bottom-left
+      [PL,    PT,      cx100 - PL,      cy100 - PT,      "rgba(59,139,255,0.09)"],  // IMPROVING top-left
     ];
     fills.forEach(([x, y, w, h, c]) => { ctx.fillStyle = c; ctx.fillRect(x, y, w, h); });
 
@@ -229,37 +229,42 @@ export const RRGChartCanvas: React.FC<RRGChartProps> = ({
         ctx.stroke();
       }
 
-      /* history dots */
+      /* history dots — larger, warmer */
       for (let i = 0; i < N - 1; i++) {
         const t = (i + 1) / N;
-        const alpha = dimmed ? 0.06 : (0.06 + 0.45 * t);
+        const alpha = dimmed ? 0.08 : (0.1 + 0.55 * t);
+        const dotR = 1.5 + 1.5 * t;
         ctx.globalAlpha = alpha;
         ctx.fillStyle = color;
         ctx.beginPath();
-        ctx.arc(pts[i].x, pts[i].y, 2, 0, Math.PI * 2);
+        ctx.arc(pts[i].x, pts[i].y, dotR, 0, Math.PI * 2);
         ctx.fill();
       }
 
-      /* head dot — white border circle, like the reference "2026 Aug" dot */
+      /* head dot — EVERY head gets a warm radial glow */
       const head = pts[N - 1];
-      const hr = isSel ? 8 : isHov ? 7 : 5.5;
-      ctx.globalAlpha = dimmed ? 0.35 : 1;
-      /* glow for selected */
-      if (isSel || isHov) {
-        ctx.beginPath();
-        ctx.arc(head.x, head.y, hr + 6, 0, Math.PI * 2);
-        const g = ctx.createRadialGradient(head.x, head.y, hr - 2, head.x, head.y, hr + 8);
-        g.addColorStop(0, color + "55");
-        g.addColorStop(1, color + "00");
-        ctx.fillStyle = g;
-        ctx.fill();
-      }
+      const hr = isSel ? 9 : isHov ? 8 : 6;
+      ctx.globalAlpha = dimmed ? 0.3 : 1;
+
+      /* outer glow — always present, just bigger for selected */
+      const glowR = isSel ? 22 : isHov ? 18 : 14;
+      ctx.beginPath();
+      ctx.arc(head.x, head.y, glowR, 0, Math.PI * 2);
+      const g = ctx.createRadialGradient(head.x, head.y, hr * 0.3, head.x, head.y, glowR);
+      g.addColorStop(0, color + (dimmed ? "18" : isSel ? "60" : "40"));
+      g.addColorStop(0.6, color + (dimmed ? "08" : "18"));
+      g.addColorStop(1, color + "00");
+      ctx.fillStyle = g;
+      ctx.fill();
+
+      /* solid core dot */
       ctx.fillStyle = color;
       ctx.beginPath();
       ctx.arc(head.x, head.y, hr, 0, Math.PI * 2);
       ctx.fill();
-      ctx.strokeStyle = "#FFFFFF";
-      ctx.lineWidth = isSel ? 2 : 1.5;
+      /* white border ring */
+      ctx.strokeStyle = dimmed ? "rgba(255,255,255,0.4)" : "#FFFFFF";
+      ctx.lineWidth = isSel ? 2.5 : 1.5;
       ctx.stroke();
 
       /* label bookkeeping */
@@ -300,11 +305,11 @@ export const RRGChartCanvas: React.FC<RRGChartProps> = ({
         ctx.beginPath(); ctx.moveTo(headX, headY); ctx.lineTo(x, y + h / 2); ctx.stroke();
       }
 
-      /* pill background */
-      ctx.fillStyle = selected ? "#1E2229F5" : "#181B1FEE";
+      /* pill background — darker to match theme */
+      ctx.fillStyle = selected ? "#14161BF5" : "#0E1014EE";
       roundRect(ctx, x - 2, y - 1, w, h, 4);
       ctx.fill();
-      ctx.strokeStyle = selected ? color + "AA" : "rgba(255,255,255,0.1)";
+      ctx.strokeStyle = selected ? color + "BB" : "rgba(255,255,255,0.08)";
       ctx.lineWidth = 1;
       ctx.stroke();
 
