@@ -15,7 +15,7 @@ export function App() {
   const [error, setError]     = useState<string | null>(null);
 
   const [dateIdx, setDateIdx]       = useState(0);
-  const [tailLength, setTailLength] = useState(12);
+  const [tailLength, setTailLength] = useState(8);
   const [selected, setSelected]     = useState<string | null>(null);
   const [hovered, setHovered]       = useState<string | null>(null);
   const [visible, setVisible]       = useState<Set<string>>(new Set());
