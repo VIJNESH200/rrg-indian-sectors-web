@@ -7,6 +7,8 @@ import { SelectedSectorBar } from "./components/SelectedSectorBar";
 import { SectorTable } from "./components/SectorTable";
 import { RefreshCw, AlertTriangle } from "lucide-react";
 
+import { exportRrgDataToCSV } from "./utils/exportCsv";
+
 export function App() {
   const [data, setData]       = useState<RrgResponseData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -85,7 +87,10 @@ export function App() {
   return (
     <div className="min-h-screen flex flex-col" style={{ background: "var(--bg-root)" }}>
       {/* ── Header ── */}
-      <Header latestDate={data.dates[dateIdx] ?? data.dates[data.dates.length - 1]} />
+      <Header
+        latestDate={data.dates[dateIdx] ?? data.dates[data.dates.length - 1]}
+        onExportCSV={() => exportRrgDataToCSV(data)}
+      />
 
       {/* ── Main ── */}
       <main className="flex-1 w-full max-w-[1440px] mx-auto px-4 lg:px-6 py-4 flex flex-col gap-3">

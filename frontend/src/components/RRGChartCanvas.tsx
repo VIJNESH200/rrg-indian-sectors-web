@@ -109,8 +109,8 @@ export const RRGChartCanvas: React.FC<RRGChartProps> = ({
     const W = rect.width, H = rect.height;
     ctx.clearRect(0, 0, W, H);
 
-    /* paddings */
-    const PL = 72, PR = 20, PT = 24, PB = 44;
+    /* paddings — PL 90 gives generous clearance for Y-axis title + 5-character tick numbers */
+    const PL = 90, PR = 20, PT = 24, PB = 44;
     const PW = W - PL - PR, PH = H - PT - PB;
 
     const { x0, x1, y0, y1 } = computeBounds();
@@ -185,7 +185,7 @@ export const RRGChartCanvas: React.FC<RRGChartProps> = ({
     ctx.textBaseline = "middle";
     for (let i = 0; i <= gridStepsY; i++) {
       const v = y0 + (i / gridStepsY) * (y1 - y0);
-      ctx.fillText(v.toFixed(1), PL - 10, toY(v));
+      ctx.fillText(v.toFixed(1), PL - 12, toY(v));
     }
 
     ctx.fillStyle = "#FFFFFF";
@@ -194,7 +194,7 @@ export const RRGChartCanvas: React.FC<RRGChartProps> = ({
     ctx.textBaseline = "bottom";
     ctx.fillText("RS-Ratio (Relative Strength)", PL + PW / 2, H - 4);
     ctx.save();
-    ctx.translate(20, PT + PH / 2);
+    ctx.translate(16, PT + PH / 2);
     ctx.rotate(-Math.PI / 2);
     ctx.textBaseline = "top";
     ctx.fillText("RS-Momentum", 0, 0);
@@ -353,7 +353,7 @@ export const RRGChartCanvas: React.FC<RRGChartProps> = ({
     const canvas = canvasRef.current; if (!canvas) return null;
     const rect = canvas.getBoundingClientRect();
     const W = rect.width, H = rect.height;
-    const PL = 72, PR = 20, PT = 24, PB = 44;
+    const PL = 90, PR = 20, PT = 24, PB = 44;
     const PW = W - PL - PR;
     const { x0, x1, y0, y1 } = computeBounds();
     const toX = (v: number) => PL + ((v - x0) / (x1 - x0)) * PW;

@@ -1,9 +1,12 @@
 import React from "react";
-import { Activity } from "lucide-react";
+import { Activity, Download } from "lucide-react";
 
-interface HeaderProps { latestDate?: string; }
+interface HeaderProps {
+  latestDate?: string;
+  onExportCSV?: () => void;
+}
 
-export const Header: React.FC<HeaderProps> = ({ latestDate }) => (
+export const Header: React.FC<HeaderProps> = ({ latestDate, onExportCSV }) => (
   <header
     className="header-glow flex items-center justify-between h-11 px-5 shrink-0"
     style={{ background: "var(--bg-surface)", borderBottom: "1px solid var(--border)" }}
@@ -12,24 +15,34 @@ export const Header: React.FC<HeaderProps> = ({ latestDate }) => (
       <Activity className="w-3.5 h-3.5 text-[#3B8BFF]" strokeWidth={2.5} />
       <span className="font-bold text-white tracking-tight">RRG India</span>
       <span className="text-white/15">·</span>
-      <span className="text-slate-500">NSE Sector Rotation</span>
+      <span className="text-slate-400 font-medium">NSE Sector Rotation</span>
       <span className="text-white/15">·</span>
-      <span className="text-slate-500">Nifty 50</span>
+      <span className="text-slate-400 font-medium">Nifty 50</span>
       {latestDate && (
         <>
           <span className="text-white/15">·</span>
-          <span className="font-mono text-[12px] text-slate-400">{latestDate}</span>
+          <span className="font-mono text-[12px] text-slate-300 font-semibold">{latestDate}</span>
         </>
       )}
     </div>
     <div className="flex items-center gap-3">
+      {onExportCSV && (
+        <button
+          onClick={onExportCSV}
+          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-[11px] font-semibold text-blue-400 bg-blue-500/10 border border-blue-500/30 hover:bg-blue-500/20 hover:border-blue-500/50 transition-all cursor-pointer shadow-sm"
+          title="Download RRG sector dataset as CSV/Excel"
+        >
+          <Download className="w-3.5 h-3.5" />
+          Export CSV / Excel
+        </button>
+      )}
       <div className="flex items-center gap-1.5">
         <span className="live-dot w-[6px] h-[6px] rounded-full bg-emerald-500" />
         <span className="text-[11px] font-bold text-emerald-400 font-mono tracking-widest">LIVE</span>
       </div>
       <a href="https://github.com/VIJNESH200/rrg-indian-sectors-web"
         target="_blank" rel="noreferrer"
-        className="text-[11px] text-slate-700 hover:text-slate-400 transition-colors ml-1">
+        className="text-[11px] text-slate-400 hover:text-white transition-colors ml-1 font-medium">
         GitHub ↗
       </a>
     </div>
