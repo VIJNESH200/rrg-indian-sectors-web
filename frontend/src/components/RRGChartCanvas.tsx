@@ -110,7 +110,7 @@ export const RRGChartCanvas: React.FC<RRGChartProps> = ({
     ctx.clearRect(0, 0, W, H);
 
     /* paddings */
-    const PL = 56, PR = 20, PT = 24, PB = 44;
+    const PL = 72, PR = 20, PT = 24, PB = 44;
     const PW = W - PL - PR, PH = H - PT - PB;
 
     const { x0, x1, y0, y1 } = computeBounds();
@@ -172,9 +172,9 @@ export const RRGChartCanvas: React.FC<RRGChartProps> = ({
     ctx.lineWidth = 1;
     ctx.strokeRect(PL, PT, PW, PH);
 
-    /* ── 4. Axis ticks & labels (bold, high-contrast) ── */
+    /* ── 4. Axis ticks & labels (clear, non-overlapping) ── */
     ctx.fillStyle = "#E2E8F0";
-    ctx.font = "700 11px 'JetBrains Mono', monospace";
+    ctx.font = "11px 'JetBrains Mono', monospace";
     ctx.textAlign = "center";
     ctx.textBaseline = "top";
     for (let i = 0; i <= gridStepsX; i++) {
@@ -185,16 +185,16 @@ export const RRGChartCanvas: React.FC<RRGChartProps> = ({
     ctx.textBaseline = "middle";
     for (let i = 0; i <= gridStepsY; i++) {
       const v = y0 + (i / gridStepsY) * (y1 - y0);
-      ctx.fillText(v.toFixed(1), PL - 8, toY(v));
+      ctx.fillText(v.toFixed(1), PL - 10, toY(v));
     }
 
     ctx.fillStyle = "#FFFFFF";
-    ctx.font = "700 12px Inter, sans-serif";
+    ctx.font = "600 12px Inter, sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "bottom";
     ctx.fillText("RS-Ratio (Relative Strength)", PL + PW / 2, H - 4);
     ctx.save();
-    ctx.translate(14, PT + PH / 2);
+    ctx.translate(20, PT + PH / 2);
     ctx.rotate(-Math.PI / 2);
     ctx.textBaseline = "top";
     ctx.fillText("RS-Momentum", 0, 0);
@@ -353,7 +353,7 @@ export const RRGChartCanvas: React.FC<RRGChartProps> = ({
     const canvas = canvasRef.current; if (!canvas) return null;
     const rect = canvas.getBoundingClientRect();
     const W = rect.width, H = rect.height;
-    const PL = 56, PR = 20, PT = 24, PB = 44;
+    const PL = 72, PR = 20, PT = 24, PB = 44;
     const PW = W - PL - PR;
     const { x0, x1, y0, y1 } = computeBounds();
     const toX = (v: number) => PL + ((v - x0) / (x1 - x0)) * PW;

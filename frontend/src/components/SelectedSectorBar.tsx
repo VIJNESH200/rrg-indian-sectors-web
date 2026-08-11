@@ -57,7 +57,7 @@ export const SelectedSectorBar: React.FC<Props> = ({
   return (
     <div
       className="card flex flex-wrap items-center gap-x-6 gap-y-2 px-5 py-3"
-      style={{ borderColor: "rgba(59,139,255,0.2)", background: "rgba(59,139,255,0.04)" }}
+      style={{ borderColor: "var(--border-md)", background: "var(--bg-surface)" }}
     >
       {/* Name + quadrant */}
       <div className="flex items-center gap-3 shrink-0">

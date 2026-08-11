@@ -8,8 +8,8 @@
     --bg-surface: #0E1014;
     --bg-raised:  #14161B;
     --bg-hover:   #1A1D23;
-    --border:     rgba(255,255,255,0.05);
-    --border-md:  rgba(255,255,255,0.08);
+    --border:     rgba(255,255,255,0.14);
+    --border-md:  rgba(255,255,255,0.22);
     --accent:     #3B8BFF;
     --accent-dim: rgba(59,139,255,0.18);
     --green:      #22C55E;
@@ -35,7 +35,8 @@
   .card {
     @apply rounded-lg border;
     background: var(--bg-surface);
-    border-color: var(--border);
+    border-color: rgba(255,255,255,0.14);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
   }
 
   /* ── Icon-style transport button ── */
