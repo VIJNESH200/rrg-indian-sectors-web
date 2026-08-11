@@ -108,7 +108,7 @@ export function App() {
       />
 
       {/* ── Main ── */}
-      <main className="flex-1 w-full max-w-[1440px] mx-auto px-4 lg:px-6 py-4 flex flex-col gap-3">
+      <main className="flex-1 w-full max-w-[1440px] mx-auto px-2.5 sm:px-4 lg:px-6 py-2.5 sm:py-4 flex flex-col gap-2.5 sm:gap-3">
 
         {/* Large RRG chart */}
         <RRGChartCanvas

@@ -56,74 +56,85 @@ export const TimelineControls: React.FC<TimelineControlsProps> = ({
     <div className="card flex flex-col gap-0 overflow-hidden">
       {/* ── Row 1: transport controls + scrubber + date + trail pills ── */}
       <div
-        className="flex items-center gap-2 px-3 py-2"
+        className="flex flex-col sm:flex-row sm:items-center gap-2 px-3 py-2"
         style={{ borderBottom: "1px solid var(--border)" }}
       >
-        {/* Transport */}
-        <div className="flex items-center gap-1">
-          <button className="btn-icon" onClick={() => { setPlaying(false); onIndexChange(0); }} title="Reset">
-            <RotateCcw className="w-4 h-4 text-white" strokeWidth={2.5} />
-          </button>
-          <button className="btn-icon" onClick={stepBack} title="Step back">
-            <SkipBack className="w-4 h-4 text-white" strokeWidth={2.5} />
-          </button>
-          <button className={`btn-icon ${playing ? "active" : ""}`} onClick={() => setPlaying(p => !p)} title={playing ? "Pause" : "Play"}>
-            {playing ? <Pause className="w-4 h-4 text-white" strokeWidth={2.5} /> : <Play className="w-4 h-4 text-white" strokeWidth={2.5} />}
-          </button>
-          <button className="btn-icon" onClick={stepFwd} title="Step forward">
-            <SkipForward className="w-4 h-4 text-white" strokeWidth={2.5} />
-          </button>
-          <button className="btn-icon" onClick={goLast} title="Go to latest">
-            <ChevronLast className="w-4 h-4 text-white" strokeWidth={2.5} />
-          </button>
+        <div className="flex items-center justify-between sm:justify-start gap-2 w-full sm:w-auto">
+          {/* Transport */}
+          <div className="flex items-center gap-1 shrink-0">
+            <button className="btn-icon" onClick={() => { setPlaying(false); onIndexChange(0); }} title="Reset">
+              <RotateCcw className="w-4 h-4 text-white" strokeWidth={2.5} />
+            </button>
+            <button className="btn-icon" onClick={stepBack} title="Step back">
+              <SkipBack className="w-4 h-4 text-white" strokeWidth={2.5} />
+            </button>
+            <button className={`btn-icon ${playing ? "active" : ""}`} onClick={() => setPlaying(p => !p)} title={playing ? "Pause" : "Play"}>
+              {playing ? <Pause className="w-4 h-4 text-white" strokeWidth={2.5} /> : <Play className="w-4 h-4 text-white" strokeWidth={2.5} />}
+            </button>
+            <button className="btn-icon" onClick={stepFwd} title="Step forward">
+              <SkipForward className="w-4 h-4 text-white" strokeWidth={2.5} />
+            </button>
+            <button className="btn-icon" onClick={goLast} title="Go to latest">
+              <ChevronLast className="w-4 h-4 text-white" strokeWidth={2.5} />
+            </button>
+          </div>
+
+          {/* Date badge */}
+          <div className="flex items-center gap-1.5 shrink-0">
+            <span
+              className="font-mono text-[11px] text-slate-300 rounded px-2 py-0.5 font-semibold"
+              style={{ background: "var(--bg-raised)", border: "1px solid var(--border)" }}
+            >
+              {dates[selectedIndex] ?? "—"}
+            </span>
+            <span className="text-[10px] text-slate-400 font-mono font-medium">
+              {selectedIndex + 1}/{dates.length}
+            </span>
+          </div>
         </div>
 
-        {/* Scrubber */}
-        <input
-          type="range" min={0} max={maxIdx} value={selectedIndex}
-          onChange={e => onIndexChange(Number(e.target.value))}
-          className="flex-1 min-w-0"
-        />
-
-        {/* Date badge */}
-        <span
-          className="font-mono text-[11px] text-slate-300 rounded px-2 py-0.5 shrink-0 font-semibold"
-          style={{ background: "var(--bg-raised)", border: "1px solid var(--border)" }}
-        >
-          {dates[selectedIndex] ?? "—"}
-        </span>
-        <span className="text-[10px] text-slate-400 font-mono shrink-0 font-medium">
-          {selectedIndex + 1}/{dates.length}
-        </span>
-
-        {/* Speed pills */}
-        <div className="flex items-center gap-0.5 shrink-0 ml-1">
-          {SPEED_OPTIONS.map(s => (
-            <button key={s} className={`pill px-1.5 ${speed === s ? "active" : ""}`}
-              onClick={() => setSpeed(s)}>
-              {s}×
-            </button>
-          ))}
+        {/* Scrubber slider */}
+        <div className="flex items-center gap-2 flex-1 w-full min-w-0">
+          <input
+            type="range" min={0} max={maxIdx} value={selectedIndex}
+            onChange={e => onIndexChange(Number(e.target.value))}
+            className="flex-1 min-w-0"
+          />
         </div>
 
-        {/* Trail length pills (dynamic 4D/8D/12D/20D vs 4W/8W/12W/20W) */}
-        <div className="flex items-center gap-0.5 shrink-0 ml-2">
-          <span className="stat-label mr-1">Trail</span>
-          {TRAIL_OPTIONS.map(t => (
-            <button key={t} className={`pill ${tailLength === t && showTrail ? "active" : ""}`}
-              onClick={() => { setTrail(true); onTailLengthChange(t); }}>
-              {t}{trailUnit}
-            </button>
-          ))}
+        <div className="flex items-center justify-between sm:justify-end gap-2 shrink-0 w-full sm:w-auto">
+          {/* Speed pills */}
+          <div className="flex items-center gap-0.5 shrink-0">
+            {SPEED_OPTIONS.map(s => (
+              <button key={s} className={`pill px-1.5 ${speed === s ? "active" : ""}`}
+                onClick={() => setSpeed(s)}>
+                {s}×
+              </button>
+            ))}
+          </div>
+
+          {/* Trail length pills (dynamic 4D/8D/12D/20D vs 4W/8W/12W/20W) */}
+          <div className="flex items-center gap-0.5 shrink-0">
+            <span className="stat-label mr-1">Trail</span>
+            {TRAIL_OPTIONS.map(t => (
+              <button key={t} className={`pill ${tailLength === t && showTrail ? "active" : ""}`}
+                onClick={() => { setTrail(true); onTailLengthChange(t); }}>
+                {t}{trailUnit}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
-      {/* ── Row 2: sector filter pills ── */}
-      <div className="flex items-center gap-1.5 px-3 py-2 overflow-x-auto">
+      {/* ── Row 2: sector filter pills (native horizontal scroll container on mobile) ── */}
+      <div
+        className="w-full min-w-0 max-w-full overflow-x-auto overflow-y-hidden whitespace-nowrap flex items-center gap-1.5 px-3 py-2 scrollbar-none"
+        style={{ touchAction: "pan-x", WebkitOverflowScrolling: "touch" }}
+      >
         <span className="stat-label shrink-0">Sectors</span>
         <button
           onClick={onSelectAll}
-          className={`pill ml-1 ${visibleSectors.size === sectors.length ? "active" : ""}`}
+          className={`pill ml-1 shrink-0 ${visibleSectors.size === sectors.length ? "active" : ""}`}
         >
           All
         </button>
@@ -134,7 +145,7 @@ export const TimelineControls: React.FC<TimelineControlsProps> = ({
             <button
               key={sec}
               onClick={() => onToggleSector(sec)}
-              className="pill transition-all duration-150"
+              className="pill shrink-0 transition-all duration-150"
               style={on ? {
                 background: `${color}22`,
                 borderColor: `${color}77`,

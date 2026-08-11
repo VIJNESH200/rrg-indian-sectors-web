@@ -21,6 +21,7 @@
 
   html, body, #root {
     height: 100%;
+    overflow-x: hidden;
     background: var(--bg-root);
     color: #E2E4E9;
     font-family: 'Inter', system-ui, sans-serif;
@@ -28,6 +29,9 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
+
+  .scrollbar-none::-webkit-scrollbar { display: none; }
+  .scrollbar-none { -ms-overflow-style: none; scrollbar-width: none; }
 }
 
 @layer components {
@@ -61,12 +65,11 @@
 
   /* ── Small pill buttons ── */
   .pill {
-    @apply inline-flex items-center justify-center rounded-md px-2.5 py-1 text-[11px] font-semibold cursor-pointer;
+    @apply inline-flex items-center justify-center rounded-md px-2.5 py-1 text-[11px] font-semibold cursor-pointer shrink-0 whitespace-nowrap;
     background: var(--bg-raised);
     border: 1px solid var(--border);
     color: #6B7585;
     transition: all 0.15s ease;
-    white-space: nowrap;
   }
   .pill:hover { color: #C8CDD8; border-color: var(--border-md); background: var(--bg-hover); }
   .pill.active {

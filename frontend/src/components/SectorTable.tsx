@@ -36,8 +36,8 @@ export const SectorTable: React.FC<Props> = ({
 
   return (
     <div className="card overflow-hidden">
-      <div className="overflow-x-auto">
-        <table className="sec-table table-fixed w-full">
+      <div className="overflow-x-auto scrollbar-none">
+        <table className="sec-table table-fixed w-full min-w-[540px]">
           <thead>
             <tr style={{ background: "var(--bg-raised)" }}>
               <th className="w-[30%] text-left text-slate-300 px-4 py-2.5">SECTOR</th>

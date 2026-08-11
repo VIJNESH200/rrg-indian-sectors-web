@@ -109,8 +109,12 @@ export const RRGChartCanvas: React.FC<RRGChartProps> = ({
     const W = rect.width, H = rect.height;
     ctx.clearRect(0, 0, W, H);
 
-    /* paddings — PL 90 gives generous clearance for Y-axis title + 5-character tick numbers */
-    const PL = 90, PR = 20, PT = 24, PB = 44;
+    /* Responsive presentation dimensions based on viewport width (preserving desktop >= 640px defaults) */
+    const isMobile = W < 640;
+    const PL = isMobile ? 52 : 90;
+    const PR = isMobile ? 10 : 20;
+    const PT = isMobile ? 18 : 24;
+    const PB = isMobile ? 32 : 44;
     const PW = W - PL - PR, PH = H - PT - PB;
 
     const { x0, x1, y0, y1 } = computeBounds();
@@ -129,13 +133,14 @@ export const RRGChartCanvas: React.FC<RRGChartProps> = ({
     fills.forEach(([x, y, w, h, c]) => { ctx.fillStyle = c; ctx.fillRect(x, y, w, h); });
 
     /* ── 2. Quadrant watermark labels ── */
+    const watermarkOffset = isMobile ? 6 : 12;
     const watermarks: [string, number, number, CanvasTextAlign, CanvasTextBaseline, string][] = [
-      ["LEADING",   PL + PW - 12, PT + 12,      "right", "top",    "rgba(34,197,94,0.35)"],
-      ["WEAKENING", PL + PW - 12, PT + PH - 12, "right", "bottom", "rgba(251,146,60,0.35)"],
-      ["LAGGING",   PL + 12,      PT + PH - 12, "left",  "bottom", "rgba(239,68,68,0.35)"],
-      ["IMPROVING", PL + 12,      PT + 12,      "left",  "top",    "rgba(59,139,255,0.35)"],
+      ["LEADING",   PL + PW - watermarkOffset, PT + watermarkOffset,      "right", "top",    "rgba(34,197,94,0.35)"],
+      ["WEAKENING", PL + PW - watermarkOffset, PT + PH - watermarkOffset, "right", "bottom", "rgba(251,146,60,0.35)"],
+      ["LAGGING",   PL + watermarkOffset,      PT + PH - watermarkOffset, "left",  "bottom", "rgba(239,68,68,0.35)"],
+      ["IMPROVING", PL + watermarkOffset,      PT + watermarkOffset,      "left",  "top",    "rgba(59,139,255,0.35)"],
     ];
-    ctx.font = "700 11px Inter, sans-serif";
+    ctx.font = isMobile ? "700 9px Inter, sans-serif" : "700 11px Inter, sans-serif";
     ctx.letterSpacing = "0.08em";
     watermarks.forEach(([txt, x, y, align, base, color]) => {
       ctx.textAlign = align as CanvasTextAlign;
@@ -149,7 +154,7 @@ export const RRGChartCanvas: React.FC<RRGChartProps> = ({
     ctx.strokeStyle = "rgba(255,255,255,0.04)";
     ctx.lineWidth = 1;
     ctx.setLineDash([]);
-    const gridStepsX = 6, gridStepsY = 6;
+    const gridStepsX = isMobile ? 4 : 6, gridStepsY = isMobile ? 4 : 6;
     for (let i = 0; i <= gridStepsX; i++) {
       const v = x0 + (i / gridStepsX) * (x1 - x0);
       const x = toX(v);
@@ -174,27 +179,27 @@ export const RRGChartCanvas: React.FC<RRGChartProps> = ({
 
     /* ── 4. Axis ticks & labels (clear, non-overlapping) ── */
     ctx.fillStyle = "#E2E8F0";
-    ctx.font = "11px 'JetBrains Mono', monospace";
+    ctx.font = isMobile ? "9px 'JetBrains Mono', monospace" : "11px 'JetBrains Mono', monospace";
     ctx.textAlign = "center";
     ctx.textBaseline = "top";
     for (let i = 0; i <= gridStepsX; i++) {
       const v = x0 + (i / gridStepsX) * (x1 - x0);
-      ctx.fillText(v.toFixed(1), toX(v), PT + PH + 8);
+      ctx.fillText(v.toFixed(1), toX(v), PT + PH + (isMobile ? 5 : 8));
     }
     ctx.textAlign = "right";
     ctx.textBaseline = "middle";
     for (let i = 0; i <= gridStepsY; i++) {
       const v = y0 + (i / gridStepsY) * (y1 - y0);
-      ctx.fillText(v.toFixed(1), PL - 12, toY(v));
+      ctx.fillText(v.toFixed(1), PL - (isMobile ? 8 : 12), toY(v));
     }
 
     ctx.fillStyle = "#FFFFFF";
-    ctx.font = "600 12px Inter, sans-serif";
+    ctx.font = isMobile ? "600 10px Inter, sans-serif" : "600 12px Inter, sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "bottom";
-    ctx.fillText("RS-Ratio (Relative Strength)", PL + PW / 2, H - 4);
+    ctx.fillText("RS-Ratio (Relative Strength)", PL + PW / 2, H - (isMobile ? 2 : 4));
     ctx.save();
-    ctx.translate(16, PT + PH / 2);
+    ctx.translate(isMobile ? 10 : 16, PT + PH / 2);
     ctx.rotate(-Math.PI / 2);
     ctx.textBaseline = "top";
     ctx.fillText("RS-Momentum", 0, 0);
@@ -218,6 +223,7 @@ export const RRGChartCanvas: React.FC<RRGChartProps> = ({
         if (r != null && mo != null) pts.push({ x: toX(r), y: toY(mo), ratio: r, mom: mo, date: data.dates[i], index: i });
       }
       if (pts.length === 0) return;
+
       const N = pts.length;
 
       /* trail line */
@@ -226,7 +232,7 @@ export const RRGChartCanvas: React.FC<RRGChartProps> = ({
         const alpha = dimmed ? (0.08 + 0.12 * t) : (0.12 + 0.88 * t);
         ctx.globalAlpha = isSel || isHov ? Math.min(1, alpha * 1.4) : alpha;
         ctx.strokeStyle = color;
-        ctx.lineWidth = isSel ? 3 : isHov ? 2.5 : 1.8;
+        ctx.lineWidth = isSel ? (isMobile ? 2.5 : 3) : isHov ? (isMobile ? 2 : 2.5) : (isMobile ? 1.5 : 1.8);
         ctx.lineCap = "round";
         ctx.beginPath();
         ctx.moveTo(pts[i].x, pts[i].y);
@@ -238,7 +244,7 @@ export const RRGChartCanvas: React.FC<RRGChartProps> = ({
       for (let i = 0; i < N - 1; i++) {
         const t = (i + 1) / N;
         const alpha = dimmed ? 0.08 : (0.1 + 0.55 * t);
-        const dotR = 1.5 + 1.5 * t;
+        const dotR = isMobile ? (1 + 1 * t) : (1.5 + 1.5 * t);
         ctx.globalAlpha = alpha;
         ctx.fillStyle = color;
         ctx.beginPath();
@@ -248,11 +254,15 @@ export const RRGChartCanvas: React.FC<RRGChartProps> = ({
 
       /* head dot */
       const head = pts[N - 1];
-      const hr = isSel ? 9 : isHov ? 8 : 6;
+      const hr = isMobile
+        ? (isSel ? 7 : isHov ? 6 : 4.5)
+        : (isSel ? 9 : isHov ? 8 : 6);
       ctx.globalAlpha = dimmed ? 0.3 : 1;
 
       /* outer glow */
-      const glowR = isSel ? 22 : isHov ? 18 : 14;
+      const glowR = isMobile
+        ? (isSel ? 14 : isHov ? 12 : 9)
+        : (isSel ? 22 : isHov ? 18 : 14);
       ctx.beginPath();
       ctx.arc(head.x, head.y, glowR, 0, Math.PI * 2);
       const g = ctx.createRadialGradient(head.x, head.y, hr * 0.3, head.x, head.y, glowR);
@@ -269,16 +279,18 @@ export const RRGChartCanvas: React.FC<RRGChartProps> = ({
       ctx.fill();
       /* white border ring */
       ctx.strokeStyle = dimmed ? "rgba(255,255,255,0.4)" : "#FFFFFF";
-      ctx.lineWidth = isSel ? 2.5 : 1.5;
+      ctx.lineWidth = isSel ? 2 : 1.2;
       ctx.stroke();
 
       /* label bookkeeping */
-      ctx.font = "600 11px Inter, sans-serif";
+      ctx.font = isMobile ? "600 9.5px Inter, sans-serif" : "600 11px Inter, sans-serif";
       const tw = ctx.measureText(getSectorName(sec)).width;
+      const boxW = tw + (isMobile ? 6 : 10);
+      const boxH = isMobile ? 15 : 18;
       labelBoxes.push({
         sector: sec,
-        x: head.x + 10, y: head.y - 9,
-        w: tw + 10, h: 18,
+        x: head.x + (isMobile ? 6 : 10), y: head.y - (isMobile ? 7 : 9),
+        w: boxW, h: boxH,
         headX: head.x, headY: head.y,
         color, text: getSectorName(sec),
         dimmed, selected: isSel,
@@ -353,14 +365,18 @@ export const RRGChartCanvas: React.FC<RRGChartProps> = ({
     const canvas = canvasRef.current; if (!canvas) return null;
     const rect = canvas.getBoundingClientRect();
     const W = rect.width, H = rect.height;
-    const PL = 90, PR = 20, PT = 24, PB = 44;
+    const isMobile = W < 640;
+    const PL = isMobile ? 52 : 90;
+    const PR = isMobile ? 10 : 20;
+    const PT = isMobile ? 18 : 24;
+    const PB = isMobile ? 32 : 44;
     const PW = W - PL - PR;
     const { x0, x1, y0, y1 } = computeBounds();
     const toX = (v: number) => PL + ((v - x0) / (x1 - x0)) * PW;
     const toY = (v: number) => PT + (1 - (v - y0) / (y1 - y0)) * (H - PT - PB);
 
     let best: HoveredPointInfo | null = null;
-    let bestDist = 18;
+    let bestDist = isMobile ? 24 : 18;
 
     const startIdx = Math.max(0, selectedDateIndex - tailLength + 1);
 
@@ -415,19 +431,46 @@ export const RRGChartCanvas: React.FC<RRGChartProps> = ({
     }
   };
 
+  const handleTouchStart = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    if (!canvasRef.current || e.touches.length === 0) return;
+    const rect = canvasRef.current.getBoundingClientRect();
+    const touch = e.touches[0];
+    const pt = hitTestPoint(touch.clientX - rect.left, touch.clientY - rect.top);
+    if (pt) {
+      setHoveredPoint(pt);
+      onHoverSector(pt.sector);
+      onSelectSector(pt.sector);
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    if (!canvasRef.current || e.touches.length === 0) return;
+    const rect = canvasRef.current.getBoundingClientRect();
+    const touch = e.touches[0];
+    const pt = hitTestPoint(touch.clientX - rect.left, touch.clientY - rect.top);
+    if (pt) {
+      setHoveredPoint(pt);
+      onHoverSector(pt.sector);
+    }
+  };
+
   const qClass = (q: QuadrantName) =>
     q === "Leading" ? "qbadge-leading" : q === "Weakening" ? "qbadge-weakening"
     : q === "Lagging" ? "qbadge-lagging" : "qbadge-improving";
 
+  const canvasWidth = canvasRef.current?.getBoundingClientRect().width || 360;
+
   return (
-    <div className="relative w-full" style={{ height: "clamp(420px, 62vh, 680px)" }}>
+    <div className="relative w-full h-[360px] sm:h-[clamp(420px,62vh,680px)]">
       <canvas
         ref={canvasRef}
-        className="w-full h-full cursor-crosshair rounded-lg"
+        className="w-full h-full cursor-crosshair rounded-lg touch-none"
         style={{ background: "var(--bg-surface)", border: "1px solid var(--border)" }}
         onClick={handleClick}
         onMouseMove={handleMove}
         onMouseLeave={() => { setHoveredPoint(null); onHoverSector(null); }}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
       />
 
       {/* Tooltip for ANY hovered datapoint along trail */}
@@ -435,7 +478,7 @@ export const RRGChartCanvas: React.FC<RRGChartProps> = ({
         <div
           className="pointer-events-none absolute z-40"
           style={{
-            left: Math.min(hoveredPoint.canvasX + 14, 640),
+            left: Math.min(hoveredPoint.canvasX + 8, Math.max(8, canvasWidth - 195)),
             top: Math.max(hoveredPoint.canvasY - 10, 8),
           }}
         >
