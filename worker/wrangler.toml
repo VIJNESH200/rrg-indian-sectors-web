@@ -1,0 +1,15 @@
+name = "rrg-indian-sectors-api"
+main = "src/index.ts"
+compatibility_date = "2024-01-01"
+
+[vars]
+ENVIRONMENT = "production"
+
+# KV Cache Binding for computed RRG Data
+[[kv_namespaces]]
+binding = "RRG_CACHE"
+id = "rrg_cache_namespace"
+
+# Cron Trigger for scheduled refresh (Every Monday to Friday at 18:00 UTC / 11:30 PM IST)
+[triggers]
+crons = ["0 18 * * 1-5"]

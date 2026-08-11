@@ -1,0 +1,49 @@
+name: CI - RRG Indian Sectors Web Platform
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  test-and-verify:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install Node Dependencies
+        run: |
+          npm ci
+          cd frontend && npm ci
+
+      - name: Install Python Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pandas numpy yfinance
+
+      - name: Run Vitest Unit Tests
+        run: npm test
+
+      - name: Verify Math Precision (Python vs TypeScript)
+        run: |
+          python scripts/generate_ref_data.py
+          npm run verify-math
+
+      - name: Build Frontend Production Asset Bundle
+        run: |
+          cd frontend && npm run build
