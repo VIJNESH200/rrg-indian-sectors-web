@@ -20,7 +20,7 @@ export const Header: React.FC<HeaderProps> = ({
   >
     <div className="flex items-center gap-2 text-[13px]">
       <Activity className="w-3.5 h-3.5 text-[#3B8BFF]" strokeWidth={2.5} />
-      <span className="font-bold text-white tracking-tight">RRG India</span>
+      <h1 className="font-bold text-white tracking-tight text-[13px] m-0 p-0 inline">RRG India</h1>
       <span className="text-white/15">·</span>
       <span className="text-slate-400 font-medium">NSE Sector Rotation</span>
       <span className="text-white/15">·</span>
