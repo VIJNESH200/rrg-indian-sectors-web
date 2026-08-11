@@ -4,11 +4,14 @@ compatibility_date = "2024-01-01"
 
 [vars]
 ENVIRONMENT = "production"
+# ALLOWED_ORIGIN = "https://rrg-indian-sectors.pages.dev"
 
 # KV Cache Binding for computed RRG Data
+# Execute `npx wrangler kv:namespace create RRG_CACHE` and replace the id below before deploying:
 [[kv_namespaces]]
 binding = "RRG_CACHE"
-id = "rrg_cache_namespace"
+id = "REPLACE_WITH_REAL_KV_NAMESPACE_ID"
+preview_id = "REPLACE_WITH_REAL_PREVIEW_KV_NAMESPACE_ID"
 
 # Cron Trigger for scheduled refresh (Every Monday to Friday at 18:00 UTC / 11:30 PM IST)
 [triggers]

@@ -127,9 +127,9 @@ export function pctChange(series: (number | null)[]): (number | null)[] {
 
 /**
  * Computes 4-week forward return: (Price_{t+4} - Price_t) / Price_t
- * If t + 4 >= N, returns null (Pending).
+ * If t + 4 >= N or prices are null, returns null (Pending).
  */
-export function computeForward4wReturn(prices: number[]): (number | null)[] {
+export function computeForward4wReturn(prices: (number | null)[]): (number | null)[] {
   const n = prices.length;
   const result: (number | null)[] = new Array(n).fill(null);
 
@@ -138,7 +138,13 @@ export function computeForward4wReturn(prices: number[]): (number | null)[] {
     if (targetIdx < n) {
       const pCurrent = prices[i];
       const pFuture = prices[targetIdx];
-      if (pCurrent && pFuture) {
+      if (
+        pCurrent !== null &&
+        pCurrent !== undefined &&
+        pCurrent !== 0 &&
+        pFuture !== null &&
+        pFuture !== undefined
+      ) {
         result[i] = (pFuture - pCurrent) / pCurrent;
       }
     } else {
@@ -155,7 +161,7 @@ export function computeForward4wReturn(prices: number[]): (number | null)[] {
  */
 export function computeRrgMetrics(
   dates: string[],
-  prices: Record<string, number[]>,
+  prices: Record<string, (number | null)[]>,
   config: RrgConfig = DEFAULT_CONFIG
 ): RrgCalculationResult {
   const warnings: string[] = [];
@@ -186,7 +192,13 @@ export function computeRrgMetrics(
     for (let i = 0; i < n; i++) {
       const pSector = sectorPrices[i];
       const pBench = benchmarkPrices[i];
-      if (pSector !== undefined && pBench && pBench !== 0) {
+      if (
+        pSector !== null &&
+        pSector !== undefined &&
+        pBench !== null &&
+        pBench !== undefined &&
+        pBench !== 0
+      ) {
         rs[i] = pSector / pBench;
       } else {
         rs[i] = null;

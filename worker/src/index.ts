@@ -3,24 +3,14 @@ import { computeRrgMetrics, DEFAULT_CONFIG } from "./rrg_engine.js";
 
 export interface Env {
   RRG_CACHE?: any;
+  ENVIRONMENT?: string;
+  ALLOWED_ORIGIN?: string;
 }
 
 const CACHE_KEY = "rrg_latest_metrics_v1";
-const CACHE_TTL_SECONDS = 3600; // 1 hour
+const CACHE_TTL_SECONDS = 86400; // 24 hours KV TTL
 
-async function getOrComputeRrgData(env: Env, forceRefresh: boolean = false) {
-  if (!forceRefresh && env.RRG_CACHE) {
-    try {
-      const cached = await env.RRG_CACHE.get(CACHE_KEY, "json");
-      if (cached) {
-        console.log("Serving RRG data from Cloudflare KV Cache");
-        return { ...cached, cached: true };
-      }
-    } catch (e: any) {
-      console.warn("KV Cache lookup failed:", e.message);
-    }
-  }
-
+export async function computeAndCacheRrgData(env: Env) {
   console.log("Computing fresh RRG data from Yahoo Finance...");
   const fetchResult = await fetchAllPrices({ range: "5y", interval: "1wk" });
   const computed = computeRrgMetrics(fetchResult.dates, fetchResult.prices, DEFAULT_CONFIG);
@@ -46,23 +36,62 @@ async function getOrComputeRrgData(env: Env, forceRefresh: boolean = false) {
   return payload;
 }
 
-export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
-    const url = new URL(request.url);
+async function getOrComputeRrgData(env: Env, ctx?: any, forceRefresh: boolean = false) {
+  if (!forceRefresh && env.RRG_CACHE) {
+    try {
+      const cached = await env.RRG_CACHE.get(CACHE_KEY, "json");
+      if (cached) {
+        // If data is older than 4 hours, serve stale immediately and trigger background refresh via ctx.waitUntil
+        const ageMs = cached.updatedAt ? Date.now() - new Date(cached.updatedAt).getTime() : 0;
+        const STALE_THRESHOLD_MS = 4 * 3600 * 1000;
 
-    // CORS headers
-    const corsHeaders = {
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type",
-      "Content-Type": "application/json",
-    };
+        if (ageMs > STALE_THRESHOLD_MS && ctx && typeof ctx.waitUntil === "function") {
+          console.log("KV Cache entry is stale (> 4h). Triggering background update...");
+          ctx.waitUntil(computeAndCacheRrgData(env));
+        } else {
+          console.log("Serving fresh RRG data from Cloudflare KV Cache");
+        }
+
+        return { ...cached, cached: true };
+      }
+    } catch (e: any) {
+      console.warn("KV Cache lookup failed:", e.message);
+    }
+  }
+
+  return await computeAndCacheRrgData(env);
+}
+
+function getCorsHeaders(request: Request, env: Env) {
+  const requestOrigin = request.headers.get("Origin") || "*";
+  const allowedOrigin = env.ALLOWED_ORIGIN || (env.ENVIRONMENT === "production" ? requestOrigin : "*");
+
+  return {
+    "Access-Control-Allow-Origin": allowedOrigin,
+    "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type",
+    "Content-Type": "application/json",
+  };
+}
+
+export default {
+  async fetch(request: Request, env: Env, ctx: any): Promise<Response> {
+    const url = new URL(request.url);
+    const corsHeaders = getCorsHeaders(request, env);
 
     if (request.method === "OPTIONS") {
       return new Response(null, { headers: corsHeaders });
     }
 
+    // Diagnostic endpoint: disabled in production for security
     if (url.pathname === "/api/test-yahoo") {
+      if (env.ENVIRONMENT === "production") {
+        return new Response(
+          JSON.stringify({ error: "Diagnostic endpoint disabled in production." }),
+          { status: 403, headers: corsHeaders }
+        );
+      }
+
       const ticker = url.searchParams.get("ticker") || "^NSEBANK";
       const yUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?range=1y&interval=1wk`;
       try {
@@ -86,7 +115,7 @@ export default {
     if (url.pathname === "/api/rrg-data") {
       const forceRefresh = url.searchParams.get("refresh") === "true";
       try {
-        const data = await getOrComputeRrgData(env, forceRefresh);
+        const data = await getOrComputeRrgData(env, ctx, forceRefresh);
         return new Response(JSON.stringify(data), { headers: corsHeaders });
       } catch (err: any) {
         return new Response(
@@ -103,6 +132,6 @@ export default {
   },
 
   async scheduled(event: any, env: Env, ctx: any): Promise<void> {
-    ctx.waitUntil(getOrComputeRrgData(env, true));
+    ctx.waitUntil(computeAndCacheRrgData(env));
   },
 };

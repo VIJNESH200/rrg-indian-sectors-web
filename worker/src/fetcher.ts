@@ -7,7 +7,7 @@ export interface FetcherOptions {
 
 export interface FetchResult {
   dates: string[];
-  prices: Record<string, number[]>;
+  prices: Record<string, (number | null)[]>;
   warnings: string[];
 }
 
@@ -93,7 +93,7 @@ export async function fetchAllPrices(options: FetcherOptions = {}): Promise<Fetc
 
   // Get sorted list of dates from benchmark
   const sortedDates = Array.from(benchResult.dateMap.keys()).sort();
-  const prices: Record<string, number[]> = {};
+  const prices: Record<string, (number | null)[]> = {};
 
   for (const res of fetchResults) {
     if (res.warning) {
@@ -105,8 +105,8 @@ export async function fetchAllPrices(options: FetcherOptions = {}): Promise<Fetc
       continue;
     }
 
-    // Align prices to benchmark dates using forward-fill
-    const alignedPrices: number[] = new Array(sortedDates.length);
+    // Align prices to benchmark dates using forward-fill for gaps, null for pre-history
+    const alignedPrices: (number | null)[] = new Array(sortedDates.length);
     let lastValidPrice: number | null = null;
 
     for (let i = 0; i < sortedDates.length; i++) {
@@ -116,9 +116,9 @@ export async function fetchAllPrices(options: FetcherOptions = {}): Promise<Fetc
         alignedPrices[i] = p;
         lastValidPrice = p;
       } else if (lastValidPrice !== null) {
-        alignedPrices[i] = lastValidPrice; // forward-fill
+        alignedPrices[i] = lastValidPrice; // forward-fill for missing intermediate market days
       } else {
-        alignedPrices[i] = 0; // initial boundary
+        alignedPrices[i] = null; // Strictly null for pre-history before first observation
       }
     }
 
