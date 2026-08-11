@@ -1,6 +1,44 @@
-import React, { useRef, useEffect, useState } from "react";
+import React, { useRef, useEffect, useState, useCallback } from "react";
 import { RrgResponseData, QuadrantName } from "../types";
 import { getSectorName } from "../sectors";
+
+/* ─── Colour map ─── */
+const SECTOR_COLORS: Record<string, string> = {
+  "^NSEBANK":           "#3B8BFF",
+  "^CNXIT":             "#10B981",
+  "^CNXAUTO":           "#F59E0B",
+  "^CNXFMCG":           "#EC4899",
+  "^CNXPHARMA":         "#A78BFA",
+  "^CNXMETAL":          "#22D3EE",
+  "NIFTY_FIN_SERVICE.NS":"#6366F1",
+  "^CNXMEDIA":          "#F97316",
+  "^CNXPSUBANK":        "#14B8A6",
+  "NIFTY_PVT_BANK.NS":  "#60A5FA",
+  "^CNXCONSUM":         "#EAB308",
+  "^CNXENERGY":         "#EF4444",
+  "^CNXREALTY":         "#84CC16",
+  "^CNXINFRA":          "#A855F7",
+  "^CNXSERVICE":        "#F43F5E",
+};
+const FALLBACK = ["#3B8BFF","#10B981","#F59E0B","#EC4899","#A78BFA","#22D3EE","#6366F1","#F97316","#14B8A6","#84CC16"];
+
+export function getSectorColor(ticker: string, idx: number): string {
+  return SECTOR_COLORS[ticker] ?? FALLBACK[idx % FALLBACK.length];
+}
+
+export function getQuadrant(ratio: number, mom: number): QuadrantName {
+  if (ratio >= 100 && mom >= 100) return "Leading";
+  if (ratio >= 100 && mom <  100) return "Weakening";
+  if (ratio <  100 && mom <  100) return "Lagging";
+  return "Improving";
+}
+
+/* ─── helpers ─── */
+interface Pt { x: number; y: number; ratio: number; mom: number; }
+interface LabelBox {
+  sector: string; x: number; y: number; w: number; h: number;
+  headX: number; headY: number; color: string; text: string; dimmed: boolean; selected: boolean;
+}
 
 export interface RRGChartProps {
   data: RrgResponseData;
@@ -8,630 +46,386 @@ export interface RRGChartProps {
   tailLength: number;
   visibleSectors: Set<string>;
   selectedSector: string | null;
-  onSelectSector: (sector: string | null) => void;
+  onSelectSector: (s: string | null) => void;
   hoveredSector: string | null;
-  onHoverSector: (sector: string | null) => void;
+  onHoverSector:  (s: string | null) => void;
 }
 
-const SECTOR_COLORS: Record<string, string> = {
-  "^NSEBANK": "#3B82F6", // Blue
-  "^CNXIT": "#10B981", // Emerald
-  "^CNXAUTO": "#F59E0B", // Amber
-  "^CNXFMCG": "#EC4899", // Pink
-  "^CNXPHARMA": "#8B5CF6", // Purple
-  "^CNXMETAL": "#06B6D4", // Cyan
-  "NIFTY_FIN_SERVICE.NS": "#6366F1", // Indigo
-  "^CNXMEDIA": "#F97316", // Orange
-  "^CNXPSUBANK": "#14B8A6", // Teal
-  "NIFTY_PVT_BANK.NS": "#3B82F6", // Sapphire
-  "^CNXCONSUM": "#EAB308", // Yellow
-  "^CNXENERGY": "#EF4444", // Red
-  "^CNXREALTY": "#84CC16", // Lime
-  "^CNXINFRA": "#A855F7", // Violet
-  "^CNXSERVICE": "#F43F5E", // Rose
-};
-
-export function getSectorColor(ticker: string, idx: number): string {
-  if (SECTOR_COLORS[ticker]) return SECTOR_COLORS[ticker];
-  const fallbackColors = [
-    "#3B82F6", "#10B981", "#F59E0B", "#EC4899", "#8B5CF6",
-    "#06B6D4", "#6366F1", "#F97316", "#14B8A6", "#84CC16"
-  ];
-  return fallbackColors[idx % fallbackColors.length];
-}
-
-export function getQuadrant(ratio: number, mom: number): QuadrantName {
-  if (ratio >= 100 && mom >= 100) return "Leading";
-  if (ratio >= 100 && mom < 100) return "Weakening";
-  if (ratio < 100 && mom < 100) return "Lagging";
-  return "Improving";
-}
-
-interface LabelBox {
-  sector: string;
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-  headX: number;
-  headY: number;
-  color: string;
-  labelText: string;
-}
-
+/* ─── component ─── */
 export const RRGChartCanvas: React.FC<RRGChartProps> = ({
-  data,
-  selectedDateIndex,
-  tailLength,
-  visibleSectors,
-  selectedSector,
-  onSelectSector,
-  hoveredSector,
-  onHoverSector,
+  data, selectedDateIndex, tailLength,
+  visibleSectors, selectedSector, onSelectSector, hoveredSector, onHoverSector,
 }) => {
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  /* tooltip state */
   const [tooltip, setTooltip] = useState<{
-    x: number;
-    y: number;
-    sector: string;
-    ratio: number;
-    mom: number;
-    fwdReturn: number | null;
-    date: string;
-    quadrant: QuadrantName;
+    canvasX: number; canvasY: number; sector: string;
+    ratio: number; mom: number; fwd: number | null; quadrant: QuadrantName;
   } | null>(null);
 
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
+  /* ── axis bounds memoisation ── */
+  const computeBounds = useCallback(() => {
+    let minX = 97, maxX = 103, minY = 97, maxY = 103;
+    const startIdx = Math.max(0, selectedDateIndex - tailLength + 1);
+    for (const sec of data.sectors) {
+      if (!visibleSectors.has(sec)) continue;
+      const m = data.metrics[sec]; if (!m) continue;
+      for (let i = startIdx; i <= selectedDateIndex; i++) {
+        const r = m.rsRatio[i], mo = m.rsMomentum[i];
+        if (r != null) { minX = Math.min(minX, r); maxX = Math.max(maxX, r); }
+        if (mo != null){ minY = Math.min(minY, mo); maxY = Math.max(maxY, mo); }
+      }
+    }
+    const rx = Math.max(1.5, (maxX - minX) * 0.14);
+    const ry = Math.max(1.5, (maxY - minY) * 0.14);
+    return {
+      x0: Math.min(95.5, minX - rx), x1: Math.max(104.5, maxX + rx),
+      y0: Math.min(95.5, minY - ry), y1: Math.max(104.5, maxY + ry),
+    };
+  }, [data, selectedDateIndex, tailLength, visibleSectors]);
 
-    // Handle high DPI crisp canvas rendering
+  /* ── draw ── */
+  useEffect(() => {
+    const canvas = canvasRef.current; if (!canvas) return;
+    const ctx = canvas.getContext("2d"); if (!ctx) return;
+
     const rect = canvas.getBoundingClientRect();
     const dpr = window.devicePixelRatio || 1;
-    canvas.width = rect.width * dpr;
+    canvas.width  = rect.width  * dpr;
     canvas.height = rect.height * dpr;
     ctx.scale(dpr, dpr);
 
-    const width = rect.width;
-    const height = rect.height;
+    const W = rect.width, H = rect.height;
+    ctx.clearRect(0, 0, W, H);
 
-    ctx.clearRect(0, 0, width, height);
+    /* paddings */
+    const PL = 56, PR = 20, PT = 24, PB = 44;
+    const PW = W - PL - PR, PH = H - PT - PB;
 
-    // Padding for axes & labels
-    const padLeft = 65;
-    const padRight = 50;
-    const padTop = 45;
-    const padBottom = 55;
+    const { x0, x1, y0, y1 } = computeBounds();
+    const toX = (v: number) => PL + ((v - x0) / (x1 - x0)) * PW;
+    const toY = (v: number) => PT + (1 - (v - y0) / (y1 - y0)) * PH;
 
-    const plotW = width - padLeft - padRight;
-    const plotH = height - padTop - padBottom;
+    const cx100 = toX(100), cy100 = toY(100);
 
-    // Compute dynamic chart axis bounds across visible sectors up to selectedDateIndex
-    let minX = 97;
-    let maxX = 103;
-    let minY = 97;
-    let maxY = 103;
+    /* ── 1. Quadrant fills (very subtle — matches macro-intelligence charcoal glows) ── */
+    const fills: [number, number, number, number, string][] = [
+      // x, y, w, h, color
+      [cx100, PT,      PL + PW - cx100, cy100 - PT,      "rgba(34,197,94,0.055)"],   // LEADING   top-right
+      [cx100, cy100,   PL + PW - cx100, PT + PH - cy100, "rgba(251,146,60,0.055)"],  // WEAKENING bottom-right
+      [PL,    cy100,   cx100 - PL,      PT + PH - cy100, "rgba(239,68,68,0.055)"],   // LAGGING   bottom-left
+      [PL,    PT,      cx100 - PL,      cy100 - PT,      "rgba(59,139,255,0.055)"],  // IMPROVING top-left
+    ];
+    fills.forEach(([x, y, w, h, c]) => { ctx.fillStyle = c; ctx.fillRect(x, y, w, h); });
 
-    const startIdx = Math.max(0, selectedDateIndex - tailLength + 1);
+    /* ── 2. Quadrant watermark labels (same style as EXPANSION / SLOWDOWN etc.) ── */
+    const watermarks: [string, number, number, CanvasTextAlign, CanvasTextBaseline, string][] = [
+      ["LEADING",   PL + PW - 12, PT + 12,      "right", "top",    "rgba(34,197,94,0.35)"],
+      ["WEAKENING", PL + PW - 12, PT + PH - 12, "right", "bottom", "rgba(251,146,60,0.35)"],
+      ["LAGGING",   PL + 12,      PT + PH - 12, "left",  "bottom", "rgba(239,68,68,0.35)"],
+      ["IMPROVING", PL + 12,      PT + 12,      "left",  "top",    "rgba(59,139,255,0.35)"],
+    ];
+    ctx.font = "700 11px Inter, sans-serif";
+    ctx.letterSpacing = "0.08em";
+    watermarks.forEach(([txt, x, y, align, base, color]) => {
+      ctx.textAlign = align as CanvasTextAlign;
+      ctx.textBaseline = base as CanvasTextBaseline;
+      ctx.fillStyle = color;
+      ctx.fillText(txt, x, y);
+    });
+    ctx.letterSpacing = "0";
 
-    for (const sec of data.sectors) {
-      if (!visibleSectors.has(sec)) continue;
-      const metrics = data.metrics[sec];
-      if (!metrics) continue;
-
-      for (let i = startIdx; i <= selectedDateIndex; i++) {
-        const r = metrics.rsRatio[i];
-        const m = metrics.rsMomentum[i];
-        if (r !== null && r !== undefined) {
-          if (r < minX) minX = r;
-          if (r > maxX) maxX = r;
-        }
-        if (m !== null && m !== undefined) {
-          if (m < minY) minY = m;
-          if (m > maxY) maxY = m;
-        }
-      }
+    /* ── 3. Grid + 100 baselines ── */
+    /* Soft grid */
+    ctx.strokeStyle = "rgba(255,255,255,0.04)";
+    ctx.lineWidth = 1;
+    ctx.setLineDash([]);
+    const gridStepsX = 6, gridStepsY = 6;
+    for (let i = 0; i <= gridStepsX; i++) {
+      const v = x0 + (i / gridStepsX) * (x1 - x0);
+      const x = toX(v);
+      ctx.beginPath(); ctx.moveTo(x, PT); ctx.lineTo(x, PT + PH); ctx.stroke();
+    }
+    for (let i = 0; i <= gridStepsY; i++) {
+      const v = y0 + (i / gridStepsY) * (y1 - y0);
+      const y = toY(v);
+      ctx.beginPath(); ctx.moveTo(PL, y); ctx.lineTo(PL + PW, y); ctx.stroke();
     }
 
-    // Add padding margins to bounds
-    const rangeX = Math.max(2, (maxX - minX) * 0.15);
-    const rangeY = Math.max(2, (maxY - minY) * 0.15);
-
-    const x0 = Math.min(95, minX - rangeX);
-    const x1 = Math.max(105, maxX + rangeX);
-    const y0 = Math.min(95, minY - rangeY);
-    const y1 = Math.max(105, maxY + rangeY);
-
-    const toCanvasX = (val: number) => padLeft + ((val - x0) / (x1 - x0)) * plotW;
-    const toCanvasY = (val: number) => padTop + (1 - (val - y0) / (y1 - y0)) * plotH;
-
-    const cx100 = toCanvasX(100);
-    const cy100 = toCanvasY(100);
-
-    // 1. QUADRANT BACKGROUNDS (Restrained, professional dark palette)
-    // Top-Right: LEADING (Subtle Green)
-    ctx.fillStyle = "rgba(34, 197, 94, 0.04)";
-    ctx.fillRect(cx100, padTop, padLeft + plotW - cx100, cy100 - padTop);
-
-    // Bottom-Right: WEAKENING (Subtle Amber)
-    ctx.fillStyle = "rgba(245, 158, 11, 0.04)";
-    ctx.fillRect(cx100, cy100, padLeft + plotW - cx100, padTop + plotH - cy100);
-
-    // Bottom-Left: LAGGING (Subtle Red)
-    ctx.fillStyle = "rgba(239, 68, 68, 0.04)";
-    ctx.fillRect(padLeft, cy100, cx100 - padLeft, padTop + plotH - cy100);
-
-    // Top-Left: IMPROVING (Subtle Blue)
-    ctx.fillStyle = "rgba(59, 130, 246, 0.04)";
-    ctx.fillRect(padLeft, padTop, cx100 - padLeft, cy100 - padTop);
-
-    // 2. QUADRANT WATERMARKS
-    ctx.font = "700 14px Inter, sans-serif";
-    ctx.textAlign = "right";
-    ctx.textBaseline = "top";
-
-    ctx.fillStyle = "rgba(34, 197, 94, 0.25)";
-    ctx.fillText("LEADING", padLeft + plotW - 15, padTop + 15);
-
-    ctx.textBaseline = "bottom";
-    ctx.fillStyle = "rgba(245, 158, 11, 0.25)";
-    ctx.fillText("WEAKENING", padLeft + plotW - 15, padTop + plotH - 15);
-
-    ctx.textAlign = "left";
-    ctx.fillStyle = "rgba(239, 68, 68, 0.25)";
-    ctx.fillText("LAGGING", padLeft + 15, padTop + plotH - 15);
-
-    ctx.textBaseline = "top";
-    ctx.fillStyle = "rgba(59, 130, 246, 0.25)";
-    ctx.fillText("IMPROVING", padLeft + 15, padTop + 15);
-
-    // 3. 100 BASELINE CROSS & GRID
+    /* 100 baselines — dashed, slightly brighter */
+    ctx.strokeStyle = "rgba(255,255,255,0.18)";
     ctx.lineWidth = 1;
-    ctx.setLineDash([4, 4]);
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.18)";
+    ctx.setLineDash([4, 5]);
+    ctx.beginPath(); ctx.moveTo(cx100, PT); ctx.lineTo(cx100, PT + PH); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(PL, cy100); ctx.lineTo(PL + PW, cy100); ctx.stroke();
+    ctx.setLineDash([]);
 
-    // Vertical 100 Baseline
-    ctx.beginPath();
-    ctx.moveTo(cx100, padTop);
-    ctx.lineTo(cx100, padTop + plotH);
-    ctx.stroke();
+    /* Plot frame */
+    ctx.strokeStyle = "rgba(255,255,255,0.07)";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(PL, PT, PW, PH);
 
-    // Horizontal 100 Baseline
-    ctx.beginPath();
-    ctx.moveTo(padLeft, cy100);
-    ctx.lineTo(padLeft + plotW, cy100);
-    ctx.stroke();
-
-    ctx.setLineDash([]); // Reset line dash
-
-    // Outer plot frame
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
-    ctx.strokeRect(padLeft, padTop, plotW, plotH);
-
-    // Axis Ticks & Numbers
-    ctx.font = "11px 'JetBrains Mono', monospace";
-    ctx.fillStyle = "#6B7280";
+    /* ── 4. Axis ticks & labels ── */
+    ctx.fillStyle = "#4B5568";
+    ctx.font = "10px 'JetBrains Mono', monospace";
     ctx.textAlign = "center";
     ctx.textBaseline = "top";
-
-    const stepX = (x1 - x0) / 6;
-    for (let i = 0; i <= 6; i++) {
-      const val = x0 + i * stepX;
-      const x = toCanvasX(val);
-      ctx.fillText(val.toFixed(1), x, padTop + plotH + 12);
+    for (let i = 0; i <= gridStepsX; i++) {
+      const v = x0 + (i / gridStepsX) * (x1 - x0);
+      ctx.fillText(v.toFixed(1), toX(v), PT + PH + 8);
     }
-
     ctx.textAlign = "right";
     ctx.textBaseline = "middle";
-    const stepY = (y1 - y0) / 6;
-    for (let i = 0; i <= 6; i++) {
-      const val = y0 + i * stepY;
-      const y = toCanvasY(val);
-      ctx.fillText(val.toFixed(1), padLeft - 10, y);
+    for (let i = 0; i <= gridStepsY; i++) {
+      const v = y0 + (i / gridStepsY) * (y1 - y0);
+      ctx.fillText(v.toFixed(1), PL - 8, toY(v));
     }
 
-    // Axis Labels
-    ctx.fillStyle = "#9CA3AF";
-    ctx.font = "600 12px Inter, sans-serif";
+    /* Axis titles */
+    ctx.fillStyle = "#6B7280";
+    ctx.font = "11px Inter, sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "bottom";
-    ctx.fillText("RS-Ratio", padLeft + plotW / 2, height - 8);
-
+    ctx.fillText("RS-Ratio (Relative Strength)", PL + PW / 2, H - 4);
     ctx.save();
-    ctx.translate(18, padTop + plotH / 2);
+    ctx.translate(14, PT + PH / 2);
     ctx.rotate(-Math.PI / 2);
+    ctx.textBaseline = "top";
     ctx.fillText("RS-Momentum", 0, 0);
     ctx.restore();
 
-    // 4. DRAW SECTOR TRAILS AND POINTS
+    /* ── 5. Trails & sector heads ── */
+    const startIdx = Math.max(0, selectedDateIndex - tailLength + 1);
     const labelBoxes: LabelBox[] = [];
 
     data.sectors.forEach((sec, sIdx) => {
       if (!visibleSectors.has(sec)) return;
-      const metrics = data.metrics[sec];
-      if (!metrics) return;
+      const m = data.metrics[sec]; if (!m) return;
+      const color = getSectorColor(sec, sIdx);
+      const isSel = selectedSector === sec;
+      const isHov = hoveredSector === sec;
+      const dimmed = (selectedSector != null && !isSel) || (hoveredSector != null && !isHov && !isSel);
 
-      const baseColor = getSectorColor(sec, sIdx);
-      const isSelected = selectedSector === sec;
-      const isHovered = hoveredSector === sec;
-      const isDimmed = (selectedSector !== null && !isSelected) || (hoveredSector !== null && !isHovered && !isSelected);
-
-      const points: { x: number; y: number; ratio: number; mom: number; idx: number }[] = [];
-
+      const pts: Pt[] = [];
       for (let i = startIdx; i <= selectedDateIndex; i++) {
-        const r = metrics.rsRatio[i];
-        const m = metrics.rsMomentum[i];
-        if (r !== null && r !== undefined && m !== null && m !== undefined) {
-          points.push({
-            x: toCanvasX(r),
-            y: toCanvasY(m),
-            ratio: r,
-            mom: m,
-            idx: i,
-          });
-        }
+        const r = m.rsRatio[i], mo = m.rsMomentum[i];
+        if (r != null && mo != null) pts.push({ x: toX(r), y: toY(mo), ratio: r, mom: mo });
       }
+      if (pts.length === 0) return;
+      const N = pts.length;
 
-      if (points.length === 0) return;
-
-      const nPts = points.length;
-
-      // Draw trail line
-      if (nPts >= 2) {
-        for (let i = 0; i < nPts - 1; i++) {
-          const progress = (i + 1) / nPts;
-          let alpha = 0.12 + 0.88 * progress;
-          if (isDimmed) alpha *= 0.2;
-
-          ctx.strokeStyle = baseColor;
-          ctx.globalAlpha = isSelected || isHovered ? Math.min(1, alpha * 1.4) : alpha;
-          ctx.lineWidth = isSelected || isHovered ? 3.5 : 2;
-
-          ctx.beginPath();
-          ctx.moveTo(points[i].x, points[i].y);
-          ctx.lineTo(points[i + 1].x, points[i + 1].y);
-          ctx.stroke();
-        }
-      }
-
-      // Draw trail dots
-      for (let i = 0; i < nPts; i++) {
-        const isHead = i === nPts - 1;
-        const progress = (i + 1) / nPts;
-        let alpha = isHead ? 1.0 : 0.15 + 0.7 * progress;
-        if (isDimmed && !isHead) alpha *= 0.2;
-
-        const radius = isHead ? (isSelected || isHovered ? 8 : 6) : 2.5;
-
-        ctx.globalAlpha = isDimmed ? 0.3 : alpha;
-        ctx.fillStyle = baseColor;
+      /* trail line — segment-by-segment fade */
+      for (let i = 0; i < N - 1; i++) {
+        const t = (i + 1) / N;
+        const alpha = dimmed ? (0.08 + 0.12 * t) : (0.12 + 0.88 * t);
+        ctx.globalAlpha = isSel || isHov ? Math.min(1, alpha * 1.4) : alpha;
+        ctx.strokeStyle = color;
+        ctx.lineWidth = isSel ? 3 : isHov ? 2.5 : 1.8;
+        ctx.lineCap = "round";
         ctx.beginPath();
-        ctx.arc(points[i].x, points[i].y, radius, 0, Math.PI * 2);
-        ctx.fill();
-
-        if (isHead) {
-          ctx.strokeStyle = "#FFFFFF";
-          ctx.lineWidth = isSelected ? 2.5 : 1.5;
-          ctx.stroke();
-
-          // Prepare label for smart collision layout
-          const labelText = getSectorName(sec);
-          ctx.font = "600 11px Inter, sans-serif";
-          const textW = ctx.measureText(labelText).width;
-          const textH = 14;
-
-          labelBoxes.push({
-            sector: sec,
-            x: points[i].x + 10,
-            y: points[i].y - textH / 2,
-            w: textW + 8,
-            h: textH + 4,
-            headX: points[i].x,
-            headY: points[i].y,
-            color: baseColor,
-            labelText,
-          });
-        }
-      }
-
-      ctx.globalAlpha = 1.0;
-    });
-
-    // 5. SMART LABEL COLLISION AVOIDANCE ALGORITHM (Requirement #9)
-    // Adjust label positions to prevent overlapping
-    for (let i = 0; i < labelBoxes.length; i++) {
-      const boxA = labelBoxes[i];
-      for (let j = i + 1; j < labelBoxes.length; j++) {
-        const boxB = labelBoxes[j];
-
-        // Check AABB collision
-        const collide =
-          boxA.x < boxB.x + boxB.w &&
-          boxA.x + boxA.w > boxB.x &&
-          boxA.y < boxB.y + boxB.h &&
-          boxA.y + boxA.h > boxB.y;
-
-        if (collide) {
-          // Reposition boxB vertically or left
-          if (boxB.headY >= boxA.headY) {
-            boxB.y = boxA.y + boxA.h + 4;
-          } else {
-            boxB.y = boxA.y - boxB.h - 4;
-          }
-        }
-      }
-    }
-
-    // Render resolved labels & leader lines
-    ctx.font = "600 11px Inter, sans-serif";
-    labelBoxes.forEach((box) => {
-      const isSelected = selectedSector === box.sector;
-      const isHovered = hoveredSector === box.sector;
-      const isDimmed = (selectedSector !== null && !isSelected) || (hoveredSector !== null && !isHovered && !isSelected);
-
-      ctx.globalAlpha = isDimmed ? 0.3 : 1.0;
-
-      // Draw leader line if offset is significant
-      const dist = Math.hypot(box.x - box.headX, box.y + box.h / 2 - box.headY);
-      if (dist > 16) {
-        ctx.strokeStyle = box.color;
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(box.headX, box.headY);
-        ctx.lineTo(box.x, box.y + box.h / 2);
+        ctx.moveTo(pts[i].x, pts[i].y);
+        ctx.lineTo(pts[i+1].x, pts[i+1].y);
         ctx.stroke();
       }
 
-      // Draw label background pill for max contrast
-      ctx.fillStyle = isSelected ? "rgba(18, 23, 33, 0.95)" : "rgba(10, 13, 20, 0.85)";
-      ctx.fillRect(box.x - 2, box.y - 2, box.w, box.h);
-      ctx.strokeStyle = isSelected ? box.color : "rgba(255, 255, 255, 0.1)";
-      ctx.lineWidth = 1;
-      ctx.strokeRect(box.x - 2, box.y - 2, box.w, box.h);
+      /* history dots */
+      for (let i = 0; i < N - 1; i++) {
+        const t = (i + 1) / N;
+        const alpha = dimmed ? 0.06 : (0.06 + 0.45 * t);
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(pts[i].x, pts[i].y, 2, 0, Math.PI * 2);
+        ctx.fill();
+      }
 
-      // Draw label text
-      ctx.fillStyle = isSelected ? "#FFFFFF" : box.color;
-      ctx.textAlign = "left";
-      ctx.textBaseline = "middle";
-      ctx.fillText(box.labelText, box.x + 2, box.y + box.h / 2 - 1);
+      /* head dot — white border circle, like the reference "2026 Aug" dot */
+      const head = pts[N - 1];
+      const hr = isSel ? 8 : isHov ? 7 : 5.5;
+      ctx.globalAlpha = dimmed ? 0.35 : 1;
+      /* glow for selected */
+      if (isSel || isHov) {
+        ctx.beginPath();
+        ctx.arc(head.x, head.y, hr + 6, 0, Math.PI * 2);
+        const g = ctx.createRadialGradient(head.x, head.y, hr - 2, head.x, head.y, hr + 8);
+        g.addColorStop(0, color + "55");
+        g.addColorStop(1, color + "00");
+        ctx.fillStyle = g;
+        ctx.fill();
+      }
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.arc(head.x, head.y, hr, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "#FFFFFF";
+      ctx.lineWidth = isSel ? 2 : 1.5;
+      ctx.stroke();
+
+      /* label bookkeeping */
+      ctx.font = "600 11px Inter, sans-serif";
+      const tw = ctx.measureText(getSectorName(sec)).width;
+      labelBoxes.push({
+        sector: sec,
+        x: head.x + 10, y: head.y - 9,
+        w: tw + 10, h: 18,
+        headX: head.x, headY: head.y,
+        color, text: getSectorName(sec),
+        dimmed, selected: isSel,
+      });
+
+      ctx.globalAlpha = 1;
     });
 
-    ctx.globalAlpha = 1.0;
-  }, [data, selectedDateIndex, tailLength, visibleSectors, selectedSector, hoveredSector]);
+    /* ── 6. Collision-resolved labels ── */
+    for (let i = 0; i < labelBoxes.length; i++) {
+      for (let j = i + 1; j < labelBoxes.length; j++) {
+        const a = labelBoxes[i], b = labelBoxes[j];
+        if (a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y) {
+          if (b.headY >= a.headY) b.y = a.y + a.h + 3;
+          else b.y = a.y - b.h - 3;
+        }
+      }
+    }
 
-  // Canvas Click & Mousemove handlers
-  const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+    ctx.font = "600 11px Inter, sans-serif";
+    labelBoxes.forEach(({ sector, x, y, w, h, headX, headY, color, text, dimmed, selected }) => {
+      ctx.globalAlpha = dimmed ? 0.28 : 1;
+
+      /* leader line */
+      const dist = Math.hypot(x - headX, (y + h / 2) - headY);
+      if (dist > 14) {
+        ctx.strokeStyle = color + "88";
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(headX, headY); ctx.lineTo(x, y + h / 2); ctx.stroke();
+      }
+
+      /* pill background */
+      ctx.fillStyle = selected ? "#1E2229F5" : "#181B1FEE";
+      roundRect(ctx, x - 2, y - 1, w, h, 4);
+      ctx.fill();
+      ctx.strokeStyle = selected ? color + "AA" : "rgba(255,255,255,0.1)";
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      /* text */
+      ctx.fillStyle = selected ? "#FFFFFF" : color;
+      ctx.textAlign = "left";
+      ctx.textBaseline = "middle";
+      ctx.fillText(text, x + 3, y + h / 2);
+      ctx.globalAlpha = 1;
+    });
+
+  }, [data, selectedDateIndex, tailLength, visibleSectors, selectedSector, hoveredSector, computeBounds]);
+
+  /* ── hit test helper ── */
+  const hitTest = useCallback((canvasX: number, canvasY: number) => {
+    const canvas = canvasRef.current; if (!canvas) return null;
     const rect = canvas.getBoundingClientRect();
-    const mouseX = e.clientX - rect.left;
-    const mouseY = e.clientY - rect.top;
+    const W = rect.width, H = rect.height;
+    const PL = 56, PR = 20, PT = 24, PB = 44;
+    const PW = W - PL - PR;
+    const { x0, x1, y0, y1 } = computeBounds();
+    const toX = (v: number) => PL + ((v - x0) / (x1 - x0)) * PW;
+    const toY = (v: number) => PT + (1 - (v - y0) / (y1 - y0)) * (H - PT - PB);
 
-    const padLeft = 65;
-    const padRight = 50;
-    const padTop = 45;
-    const padBottom = 55;
-
-    const plotW = rect.width - padLeft - padRight;
-    const plotH = rect.height - padTop - padBottom;
-
-    let minX = 97, maxX = 103, minY = 97, maxY = 103;
-    const startIdx = Math.max(0, selectedDateIndex - tailLength + 1);
-
+    let best: string | null = null, bestDist = 24;
     for (const sec of data.sectors) {
       if (!visibleSectors.has(sec)) continue;
-      const metrics = data.metrics[sec];
-      if (!metrics) continue;
-
-      for (let i = startIdx; i <= selectedDateIndex; i++) {
-        const r = metrics.rsRatio[i];
-        const m = metrics.rsMomentum[i];
-        if (r !== null && r !== undefined) {
-          if (r < minX) minX = r;
-          if (r > maxX) maxX = r;
-        }
-        if (m !== null && m !== undefined) {
-          if (m < minY) minY = m;
-          if (m > maxY) maxY = m;
-        }
-      }
+      const m = data.metrics[sec]; if (!m) continue;
+      const r = m.rsRatio[selectedDateIndex], mo = m.rsMomentum[selectedDateIndex];
+      if (r == null || mo == null) continue;
+      const d = Math.hypot(canvasX - toX(r), canvasY - toY(mo));
+      if (d < bestDist) { bestDist = d; best = sec; }
     }
+    return best;
+  }, [data, selectedDateIndex, visibleSectors, computeBounds]);
 
-    const rangeX = Math.max(2, (maxX - minX) * 0.15);
-    const rangeY = Math.max(2, (maxY - minY) * 0.15);
-    const x0 = Math.min(95, minX - rangeX);
-    const x1 = Math.max(105, maxX + rangeX);
-    const y0 = Math.min(95, minY - rangeY);
-    const y1 = Math.max(105, maxY + rangeY);
-
-    const toCanvasX = (val: number) => padLeft + ((val - x0) / (x1 - x0)) * plotW;
-    const toCanvasY = (val: number) => padTop + (1 - (val - y0) / (y1 - y0)) * plotH;
-
-    let hitSector: string | null = null;
-    let minDist = 22;
-
-    for (const sec of data.sectors) {
-      if (!visibleSectors.has(sec)) continue;
-      const metrics = data.metrics[sec];
-      if (!metrics) continue;
-
-      const r = metrics.rsRatio[selectedDateIndex];
-      const m = metrics.rsMomentum[selectedDateIndex];
-
-      if (r !== null && r !== undefined && m !== null && m !== undefined) {
-        const cx = toCanvasX(r);
-        const cy = toCanvasY(m);
-        const dist = Math.hypot(mouseX - cx, mouseY - cy);
-
-        if (dist < minDist) {
-          minDist = dist;
-          hitSector = sec;
-        }
-      }
-    }
-
-    // REQUIREMENT #15: Clicking empty space clears selected sector
-    onSelectSector(hitSector);
+  const handleClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const rect = canvasRef.current!.getBoundingClientRect();
+    onSelectSector(hitTest(e.clientX - rect.left, e.clientY - rect.top));
   };
 
-  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const rect = canvas.getBoundingClientRect();
-    const mouseX = e.clientX - rect.left;
-    const mouseY = e.clientY - rect.top;
-
-    const padLeft = 65;
-    const padRight = 50;
-    const padTop = 45;
-    const padBottom = 55;
-
-    const plotW = rect.width - padLeft - padRight;
-    const plotH = rect.height - padTop - padBottom;
-
-    let minX = 97, maxX = 103, minY = 97, maxY = 103;
-    const startIdx = Math.max(0, selectedDateIndex - tailLength + 1);
-
-    for (const sec of data.sectors) {
-      if (!visibleSectors.has(sec)) continue;
-      const metrics = data.metrics[sec];
-      if (!metrics) continue;
-
-      for (let i = startIdx; i <= selectedDateIndex; i++) {
-        const r = metrics.rsRatio[i];
-        const m = metrics.rsMomentum[i];
-        if (r !== null && r !== undefined) {
-          if (r < minX) minX = r;
-          if (r > maxX) maxX = r;
-        }
-        if (m !== null && m !== undefined) {
-          if (m < minY) minY = m;
-          if (m > maxY) maxY = m;
-        }
-      }
-    }
-
-    const rangeX = Math.max(2, (maxX - minX) * 0.15);
-    const rangeY = Math.max(2, (maxY - minY) * 0.15);
-    const x0 = Math.min(95, minX - rangeX);
-    const x1 = Math.max(105, maxX + rangeX);
-    const y0 = Math.min(95, minY - rangeY);
-    const y1 = Math.max(105, maxY + rangeY);
-
-    const toCanvasX = (val: number) => padLeft + ((val - x0) / (x1 - x0)) * plotW;
-    const toCanvasY = (val: number) => padTop + (1 - (val - y0) / (y1 - y0)) * plotH;
-
-    let closest: any = null;
-    let minDist = 22;
-
-    for (const sec of data.sectors) {
-      if (!visibleSectors.has(sec)) continue;
-      const metrics = data.metrics[sec];
-      if (!metrics) continue;
-
-      const r = metrics.rsRatio[selectedDateIndex];
-      const m = metrics.rsMomentum[selectedDateIndex];
-      const fwd = metrics.forward4wReturn[selectedDateIndex];
-
-      if (r !== null && r !== undefined && m !== null && m !== undefined) {
-        const cx = toCanvasX(r);
-        const cy = toCanvasY(m);
-        const dist = Math.hypot(mouseX - cx, mouseY - cy);
-
-        if (dist < minDist) {
-          minDist = dist;
-          closest = {
-            x: cx,
-            y: cy,
-            sector: sec,
-            ratio: r,
-            mom: m,
-            fwdReturn: fwd,
-            date: data.dates[selectedDateIndex],
-            quadrant: getQuadrant(r, m),
-          };
-        }
-      }
-    }
-
-    if (closest) {
-      setTooltip(closest);
-      onHoverSector(closest.sector);
-    } else {
-      setTooltip(null);
-      onHoverSector(null);
-    }
+  const handleMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const rect = canvasRef.current!.getBoundingClientRect();
+    const cx = e.clientX - rect.left, cy = e.clientY - rect.top;
+    const sec = hitTest(cx, cy);
+    onHoverSector(sec);
+    if (sec) {
+      const m = data.metrics[sec]!;
+      const r  = m.rsRatio[selectedDateIndex]!;
+      const mo = m.rsMomentum[selectedDateIndex]!;
+      setTooltip({ canvasX: cx, canvasY: cy, sector: sec, ratio: r, mom: mo,
+        fwd: m.forward4wReturn[selectedDateIndex], quadrant: getQuadrant(r, mo) });
+    } else { setTooltip(null); }
   };
+
+  const qClass = (q: QuadrantName) =>
+    q === "Leading" ? "qbadge-leading" : q === "Weakening" ? "qbadge-weakening"
+    : q === "Lagging" ? "qbadge-lagging" : "qbadge-improving";
 
   return (
-    <div className="relative w-full h-[620px] lg:h-[680px] panel p-2 flex flex-col items-center justify-center bg-[#121721] overflow-hidden">
+    <div className="relative w-full" style={{ height: "clamp(420px, 62vh, 680px)" }}>
       <canvas
         ref={canvasRef}
-        className="w-full h-full cursor-pointer"
-        onClick={handleCanvasClick}
-        onMouseMove={handleMouseMove}
-        onMouseLeave={() => {
-          setTooltip(null);
-          onHoverSector(null);
-        }}
+        className="w-full h-full cursor-crosshair rounded-lg"
+        style={{ background: "var(--bg-surface)", border: "1px solid var(--border)" }}
+        onClick={handleClick}
+        onMouseMove={handleMove}
+        onMouseLeave={() => { setTooltip(null); onHoverSector(null); }}
       />
 
-      {/* REQUIREMENT #11: Compact Polished Hover Tooltip */}
+      {/* Tooltip — styled like the macro-intelligence data callout */}
       {tooltip && (
         <div
-          className="absolute z-30 pointer-events-none bg-[#0D1117]/95 border border-slate-700/80 rounded-md p-2.5 shadow-2xl backdrop-blur-md text-xs font-sans text-slate-100 min-w-[170px]"
+          className="pointer-events-none absolute z-40"
           style={{
-            left: `${Math.min(tooltip.x + 12, 620)}px`,
-            top: `${Math.max(tooltip.y - 45, 15)}px`,
+            left: Math.min(tooltip.canvasX + 14, 640),
+            top: Math.max(tooltip.canvasY - 10, 8),
           }}
         >
-          <div className="font-bold text-sm text-blue-400 mb-1">
-            {getSectorName(tooltip.sector)}
-          </div>
-          <div className="flex justify-between items-center mb-1.5 pb-1 border-b border-slate-800">
-            <span className="text-[10px] text-slate-400">Quadrant</span>
-            <span
-              className={`badge ${
-                tooltip.quadrant === "Leading"
-                  ? "badge-leading"
-                  : tooltip.quadrant === "Weakening"
-                  ? "badge-weakening"
-                  : tooltip.quadrant === "Lagging"
-                  ? "badge-lagging"
-                  : "badge-improving"
-              }`}
-            >
-              {tooltip.quadrant}
-            </span>
-          </div>
-          <div className="flex justify-between font-mono text-[11px] my-0.5">
-            <span className="text-slate-400">RS-Ratio:</span>
-            <span className="font-semibold text-slate-200">{tooltip.ratio.toFixed(2)}</span>
-          </div>
-          <div className="flex justify-between font-mono text-[11px] my-0.5">
-            <span className="text-slate-400">RS-Momentum:</span>
-            <span className="font-semibold text-slate-200">{tooltip.mom.toFixed(2)}</span>
-          </div>
-          <div className="flex justify-between font-mono text-[11px] mt-1 pt-1 border-t border-slate-800/80">
-            <span className="text-slate-400">4W Return:</span>
-            <span
-              className={`font-semibold ${
-                tooltip.fwdReturn === null || tooltip.fwdReturn === undefined
-                  ? "text-slate-500"
-                  : tooltip.fwdReturn >= 0
-                  ? "text-emerald-400"
-                  : "text-rose-400"
-              }`}
-            >
-              {tooltip.fwdReturn === null || tooltip.fwdReturn === undefined
-                ? "Pending"
-                : `${(tooltip.fwdReturn * 100).toFixed(2)}%`}
-            </span>
+          <div
+            className="rounded-lg p-3 shadow-2xl min-w-[160px]"
+            style={{ background: "var(--bg-raised)", border: "1px solid var(--border-md)" }}
+          >
+            <div className="flex items-center justify-between gap-3 mb-2">
+              <span className="font-bold text-[13px] text-white">{getSectorName(tooltip.sector)}</span>
+              <span className={`qbadge ${qClass(tooltip.quadrant)}`}>{tooltip.quadrant}</span>
+            </div>
+            <div className="flex flex-col gap-1 font-mono text-[11px]">
+              <div className="flex justify-between gap-4">
+                <span className="text-slate-500">RS-Ratio</span>
+                <span className="text-slate-100 font-semibold">{tooltip.ratio.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between gap-4">
+                <span className="text-slate-500">RS-Momentum</span>
+                <span className="text-slate-100 font-semibold">{tooltip.mom.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between gap-4 pt-1.5" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+                <span className="text-slate-500">4W Return</span>
+                <span className={`font-semibold ${tooltip.fwd == null ? "text-slate-600" : tooltip.fwd >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+                  {tooltip.fwd == null ? "Pending" : `${tooltip.fwd >= 0 ? "+" : ""}${(tooltip.fwd * 100).toFixed(2)}%`}
+                </span>
+              </div>
+            </div>
           </div>
         </div>
       )}
     </div>
   );
 };
+
+/* ── helper: rounded rect ── */
+function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}

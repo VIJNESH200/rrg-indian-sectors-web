@@ -8,133 +8,128 @@ import { SectorTable } from "./components/SectorTable";
 import { RefreshCw, AlertTriangle } from "lucide-react";
 
 export function App() {
-  const [data, setData] = useState<RrgResponseData | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
+  const [data, setData]       = useState<RrgResponseData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError]     = useState<string | null>(null);
 
-  const [selectedDateIndex, setSelectedDateIndex] = useState<number>(0);
-  const [tailLength, setTailLength] = useState<number>(12);
-  const [selectedSector, setSelectedSector] = useState<string | null>(null);
-  const [hoveredSector, setHoveredSector] = useState<string | null>(null);
-  const [visibleSectors, setVisibleSectors] = useState<Set<string>>(new Set());
+  const [dateIdx, setDateIdx]       = useState(0);
+  const [tailLength, setTailLength] = useState(12);
+  const [selected, setSelected]     = useState<string | null>(null);
+  const [hovered, setHovered]       = useState<string | null>(null);
+  const [visible, setVisible]       = useState<Set<string>>(new Set());
 
-  const fetchData = async (refresh: boolean = false) => {
-    setLoading(true);
-    setError(null);
+  const load = async (refresh = false) => {
+    setLoading(true); setError(null);
     try {
-      const DEFAULT_API_URL = "https://rrg-indian-sectors-api.rrg-indian-sectors.workers.dev/api/rrg-data";
-      const apiBase = import.meta.env.VITE_API_URL || DEFAULT_API_URL;
-      const url = refresh ? `${apiBase}${apiBase.includes("?") ? "&" : "?"}refresh=true` : apiBase;
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(`API returned HTTP ${res.status}`);
-      const json: RrgResponseData = await res.json();
-      setData(json);
-      if (json.dates?.length > 0) setSelectedDateIndex(json.dates.length - 1);
-      if (json.sectors?.length > 0) setVisibleSectors(new Set(json.sectors));
-    } catch (err: any) {
-      setError(err.message || "Unable to load RRG data");
+      const BASE = "https://rrg-indian-sectors-api.rrg-indian-sectors.workers.dev/api/rrg-data";
+      const api  = import.meta.env.VITE_API_URL || BASE;
+      const url  = refresh ? `${api}${api.includes("?") ? "&" : "?"}refresh=true` : api;
+      const r    = await fetch(url);
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const j: RrgResponseData = await r.json();
+      setData(j);
+      if (j.dates?.length)   setDateIdx(j.dates.length - 1);
+      if (j.sectors?.length) setVisible(new Set(j.sectors));
+    } catch (e: any) {
+      setError(e.message);
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => { load(); }, []);
 
-  const handleSelectAll = () => { if (data) setVisibleSectors(new Set(data.sectors)); };
-  const handleDeselectAll = () => setVisibleSectors(new Set());
-  const handleToggleSector = (sec: string) => {
-    setVisibleSectors((prev) => {
-      const next = new Set(prev);
-      next.has(sec) ? next.delete(sec) : next.add(sec);
-      return next;
-    });
-  };
+  const toggleSector = (s: string) =>
+    setVisible(prev => { const n = new Set(prev); n.has(s) ? n.delete(s) : n.add(s); return n; });
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-[#0A0D14] flex flex-col items-center justify-center gap-4">
-        <RefreshCw className="w-8 h-8 text-blue-500 animate-spin" />
-        <p className="text-sm font-semibold text-slate-400 tracking-wide font-mono">
-          Loading RRG data from Cloudflare...
-        </p>
-      </div>
-    );
-  }
+  /* Loading */
+  if (loading) return (
+    <div className="min-h-screen flex flex-col items-center justify-center gap-4"
+         style={{ background: "var(--bg-root)" }}>
+      <RefreshCw className="w-8 h-8 text-[#3B8BFF] animate-spin" />
+      <p className="text-[13px] font-mono text-slate-500">Loading sector data…</p>
+    </div>
+  );
 
-  if (error || !data) {
-    return (
-      <div className="min-h-screen bg-[#0A0D14] flex items-center justify-center p-6">
-        <div className="panel p-8 max-w-sm w-full flex flex-col items-center text-center gap-4">
-          <AlertTriangle className="w-10 h-10 text-rose-500" />
-          <div>
-            <h2 className="text-base font-bold text-slate-100 mb-1">Failed to load</h2>
-            <p className="text-xs text-slate-500">{error}</p>
-          </div>
-          <button onClick={() => fetchData(true)} className="btn-control active mt-1">
-            Retry
-          </button>
+  /* Error */
+  if (error || !data) return (
+    <div className="min-h-screen flex items-center justify-center p-6"
+         style={{ background: "var(--bg-root)" }}>
+      <div className="card p-8 max-w-xs w-full flex flex-col items-center gap-4 text-center">
+        <AlertTriangle className="w-10 h-10 text-rose-500" />
+        <div>
+          <p className="font-bold text-white mb-1">Failed to load</p>
+          <p className="text-[12px] text-slate-500">{error}</p>
         </div>
+        <button
+          onClick={() => load(true)}
+          className="pill active mt-1 px-4 py-1.5 text-[12px]"
+          style={{ background: "var(--accent-dim)", borderColor: "rgba(59,139,255,0.4)", color: "var(--accent)" }}
+        >
+          Retry
+        </button>
       </div>
-    );
-  }
-
-  const latestDate = data.dates[selectedDateIndex] ?? data.dates[data.dates.length - 1];
+    </div>
+  );
 
   return (
-    <div className="min-h-screen bg-[#0A0D14] text-slate-100 flex flex-col">
+    <div className="min-h-screen flex flex-col" style={{ background: "var(--bg-root)" }}>
       {/* ── Header ── */}
-      <Header latestDate={latestDate} isCached={data.cached} />
+      <Header latestDate={data.dates[dateIdx] ?? data.dates[data.dates.length - 1]} />
 
-      {/* ── Main scrollable content ── */}
-      <main className="flex-1 w-full max-w-[1440px] mx-auto px-3 lg:px-6 py-3 flex flex-col gap-3">
+      {/* ── Main ── */}
+      <main className="flex-1 w-full max-w-[1440px] mx-auto px-4 lg:px-6 py-4 flex flex-col gap-3">
 
-        {/* Large centerpiece RRG chart */}
+        {/* Large RRG chart */}
         <RRGChartCanvas
           data={data}
-          selectedDateIndex={selectedDateIndex}
+          selectedDateIndex={dateIdx}
           tailLength={tailLength}
-          visibleSectors={visibleSectors}
-          selectedSector={selectedSector}
-          onSelectSector={setSelectedSector}
-          hoveredSector={hoveredSector}
-          onHoverSector={setHoveredSector}
+          visibleSectors={visible}
+          selectedSector={selected}
+          onSelectSector={setSelected}
+          hoveredSector={hovered}
+          onHoverSector={setHovered}
         />
 
-        {/* Timeline scrubber + sector filters */}
+        {/* Transport + sector filter bar */}
         <TimelineControls
           dates={data.dates}
-          selectedIndex={selectedDateIndex}
-          onIndexChange={setSelectedDateIndex}
+          selectedIndex={dateIdx}
+          onIndexChange={setDateIdx}
           tailLength={tailLength}
           onTailLengthChange={setTailLength}
           sectors={data.sectors}
-          visibleSectors={visibleSectors}
-          onToggleSector={handleToggleSector}
-          onSelectAll={handleSelectAll}
-          onDeselectAll={handleDeselectAll}
+          visibleSectors={visible}
+          onToggleSector={toggleSector}
+          onSelectAll={() => setVisible(new Set(data.sectors))}
+          onDeselectAll={() => setVisible(new Set())}
         />
 
-        {/* Selected sector info bar */}
+        {/* Selected sector strip */}
         <SelectedSectorBar
           data={data}
-          selectedDateIndex={selectedDateIndex}
-          selectedSector={selectedSector}
-          onClearSelection={() => setSelectedSector(null)}
+          selectedDateIndex={dateIdx}
+          selectedSector={selected}
+          onClearSelection={() => setSelected(null)}
         />
 
         {/* Sector metrics table */}
         <SectorTable
           data={data}
-          selectedDateIndex={selectedDateIndex}
-          visibleSectors={visibleSectors}
-          selectedSector={selectedSector}
-          onSelectSector={setSelectedSector}
+          selectedDateIndex={dateIdx}
+          visibleSectors={visible}
+          selectedSector={selected}
+          onSelectSector={setSelected}
         />
       </main>
 
       {/* ── Footer ── */}
-      <footer className="shrink-0 w-full max-w-[1440px] mx-auto px-5 py-3 border-t border-white/[0.05] flex items-center justify-between text-[11px] text-slate-600">
-        <span className="font-mono">RRG India · Nifty 50 benchmark · Weekly</span>
+      <footer
+        className="shrink-0 px-5 py-3 flex justify-between items-center text-[11px] text-slate-700"
+        style={{ borderTop: "1px solid var(--border)", maxWidth: 1440, margin: "0 auto", width: "100%" }}
+      >
+        <span className="font-mono">RRG India · Weekly · Nifty 50 benchmark</span>
         <span className="italic hidden sm:block">
           Historical forward returns are descriptive, not predictive.
         </span>
