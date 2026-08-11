@@ -11,6 +11,7 @@ export interface TimelineControlsProps {
   onIndexChange: React.Dispatch<React.SetStateAction<number>>;
   tailLength: number;
   onTailLengthChange: (n: number) => void;
+  timeframe?: "1wk" | "1d";
   sectors: string[];
   visibleSectors: Set<string>;
   onToggleSector: (s: string) => void;
@@ -23,13 +24,15 @@ const SPEED_OPTIONS = [1, 2, 3]; // ×
 
 export const TimelineControls: React.FC<TimelineControlsProps> = ({
   dates, selectedIndex, onIndexChange,
-  tailLength, onTailLengthChange,
+  tailLength, onTailLengthChange, timeframe = "1wk",
   sectors, visibleSectors, onToggleSector, onSelectAll,
 }) => {
   const [playing, setPlaying]   = useState(false);
   const [speed, setSpeed]       = useState(1);          // 1× 2× 3×
   const [showTrail, setTrail]   = useState(true);
   const maxIdx = dates.length - 1;
+
+  const trailUnit = timeframe === "1d" ? "D" : "W";
 
   /* Playback */
   useEffect(() => {
@@ -84,12 +87,12 @@ export const TimelineControls: React.FC<TimelineControlsProps> = ({
 
         {/* Date badge */}
         <span
-          className="font-mono text-[11px] text-slate-300 rounded px-2 py-0.5 shrink-0"
+          className="font-mono text-[11px] text-slate-300 rounded px-2 py-0.5 shrink-0 font-semibold"
           style={{ background: "var(--bg-raised)", border: "1px solid var(--border)" }}
         >
           {dates[selectedIndex] ?? "—"}
         </span>
-        <span className="text-[10px] text-slate-600 font-mono shrink-0">
+        <span className="text-[10px] text-slate-400 font-mono shrink-0 font-medium">
           {selectedIndex + 1}/{dates.length}
         </span>
 
@@ -103,13 +106,13 @@ export const TimelineControls: React.FC<TimelineControlsProps> = ({
           ))}
         </div>
 
-        {/* Trail length pills */}
+        {/* Trail length pills (dynamic 4D/8D/12D/20D vs 4W/8W/12W/20W) */}
         <div className="flex items-center gap-0.5 shrink-0 ml-2">
           <span className="stat-label mr-1">Trail</span>
           {TRAIL_OPTIONS.map(t => (
             <button key={t} className={`pill ${tailLength === t && showTrail ? "active" : ""}`}
               onClick={() => { setTrail(true); onTailLengthChange(t); }}>
-              {t}W
+              {t}{trailUnit}
             </button>
           ))}
         </div>

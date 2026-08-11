@@ -128,6 +128,7 @@ export function App() {
           onIndexChange={setDateIdx}
           tailLength={tailLength}
           onTailLengthChange={setTailLength}
+          timeframe={timeframe}
           sectors={data.sectors}
           visibleSectors={visible}
           onToggleSector={toggleSector}
@@ -150,6 +151,7 @@ export function App() {
           visibleSectors={visible}
           selectedSector={selected}
           onSelectSector={setSelected}
+          timeframe={timeframe}
         />
       </main>
 

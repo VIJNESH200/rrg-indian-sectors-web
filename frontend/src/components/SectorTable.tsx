@@ -10,10 +10,11 @@ interface Props {
   visibleSectors: Set<string>;
   selectedSector: string | null;
   onSelectSector: (s: string | null) => void;
+  timeframe?: "1wk" | "1d";
 }
 
 export const SectorTable: React.FC<Props> = ({
-  data, selectedDateIndex, visibleSectors, selectedSector, onSelectSector,
+  data, selectedDateIndex, visibleSectors, selectedSector, onSelectSector, timeframe = "1wk",
 }) => {
   const rows = data.sectors
     .filter(s => visibleSectors.has(s))
@@ -43,7 +44,9 @@ export const SectorTable: React.FC<Props> = ({
               <th className="w-[18%] text-left text-slate-300 px-4 py-2.5">QUADRANT</th>
               <th className="w-[17%] text-right text-slate-300 px-4 py-2.5">RS-RATIO</th>
               <th className="w-[17%] text-right text-slate-300 px-4 py-2.5">RS-MOM</th>
-              <th className="w-[18%] text-right text-slate-300 px-4 py-2.5">4W FWD RETURN</th>
+              <th className="w-[18%] text-right text-slate-300 px-4 py-2.5">
+                {timeframe === "1d" ? "4D FWD RETURN" : "4W FWD RETURN"}
+              </th>
             </tr>
           </thead>
           <tbody>
