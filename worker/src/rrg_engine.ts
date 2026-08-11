@@ -10,16 +10,11 @@ export interface RrgConfig {
   tailPeriods: number;
 }
 
+import { ALL_SECTORS } from "./sectors.js";
+
 export const DEFAULT_CONFIG: RrgConfig = {
   benchmark: "^NSEI",
-  sectors: [
-    "^NSEBANK",
-    "^CNXIT",
-    "^CNXAUTO",
-    "^CNXFMCG",
-    "^CNXPHARMA",
-    "^CNXMETAL",
-  ],
+  sectors: ALL_SECTORS.map((s) => s.ticker),
   rollingWindow: 14,
   tailPeriods: 12,
 };
