@@ -10,8 +10,8 @@ ALLOWED_ORIGIN = "https://rrg-indian-sectors.pages.dev"
 # Execute `npx wrangler kv:namespace create RRG_CACHE` and replace the id below before deploying:
 [[kv_namespaces]]
 binding = "RRG_CACHE"
-id = "REPLACE_WITH_REAL_KV_NAMESPACE_ID"
-preview_id = "REPLACE_WITH_REAL_PREVIEW_KV_NAMESPACE_ID"
+id = "e262330170914f6e883a37004c9e0d91"
+preview_id = "96c9aa25d7044fe8968e2edcbc2f475a"
 
 # Cron Trigger for scheduled refresh (Every Monday to Friday at 18:00 UTC / 11:30 PM IST)
 [triggers]
