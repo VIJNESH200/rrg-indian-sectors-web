@@ -15,6 +15,29 @@ def zscore_to_100(series: pd.Series, window: int) -> pd.Series:
     z = (series - mean) / std
     return 100 + z
 
+def calculate_ema(series: pd.Series, period: int) -> pd.Series:
+    if period <= 0:
+        return series
+    return series.ewm(span=period, adjust=False).mean()
+
+def compute_rrg_python(prices_df: pd.DataFrame, rs_ema_period: int = 0, mom_ema_period: int = 0):
+    rs_ratio_dict = {}
+    rs_mom_dict = {}
+    
+    benchmark_series = prices_df[BENCHMARK]
+    for sector in SECTORS:
+        rs = prices_df[sector] / benchmark_series
+        rs_smoothed = calculate_ema(rs, rs_ema_period) if rs_ema_period > 0 else rs
+        rs_ratio = zscore_to_100(rs_smoothed, WINDOW)
+        rs_ratio_roc = rs_ratio.pct_change()
+        rs_mom_raw = zscore_to_100(rs_ratio_roc, WINDOW)
+        rs_momentum = calculate_ema(rs_mom_raw, mom_ema_period) if mom_ema_period > 0 else rs_mom_raw
+        
+        rs_ratio_dict[sector] = [None if np.isnan(v) else float(v) for v in rs_ratio.values]
+        rs_mom_dict[sector] = [None if np.isnan(v) else float(v) for v in rs_momentum.values]
+
+    return rs_ratio_dict, rs_mom_dict
+
 def main():
     tickers = [BENCHMARK, *SECTORS]
     cache_path = Path("C:/Users/Vijnesh/Desktop/rrg_cache_6afaa670.csv")
@@ -37,34 +60,31 @@ def main():
             
     prices = prices.dropna(how="all").ffill().dropna(how="any")
     
-    # Save input prices to dict
     dates_str = [d.strftime("%Y-%m-%d") for d in prices.index]
     prices_dict = {
         ticker: [float(val) for val in prices[ticker].values]
         for ticker in tickers
     }
     
-    # Compute Python reference metrics
-    rs_ratio_dict = {}
-    rs_mom_dict = {}
+    # Weekly RRG Metrics (Unsmoothed)
+    weekly_ratio, weekly_mom = compute_rrg_python(prices, rs_ema_period=0, mom_ema_period=0)
+
+    # Daily RRG Metrics (20d RS EMA + 5d RS-Mom EMA)
+    daily_ratio, daily_mom = compute_rrg_python(prices, rs_ema_period=20, mom_ema_period=5)
     
-    benchmark_series = prices[BENCHMARK]
-    for sector in SECTORS:
-        rs = prices[sector] / benchmark_series
-        rs_ratio = zscore_to_100(rs, WINDOW)
-        rs_ratio_roc = rs_ratio.pct_change()
-        rs_momentum = zscore_to_100(rs_ratio_roc, WINDOW)
-        
-        rs_ratio_dict[sector] = [None if np.isnan(v) else float(v) for v in rs_ratio.values]
-        rs_mom_dict[sector] = [None if np.isnan(v) else float(v) for v in rs_momentum.values]
-        
     ref_payload = {
         "dates": dates_str,
         "benchmark": BENCHMARK,
         "sectors": list(SECTORS),
         "prices": prices_dict,
-        "expected_rs_ratio": rs_ratio_dict,
-        "expected_rs_momentum": rs_mom_dict
+        "weekly": {
+            "expected_rs_ratio": weekly_ratio,
+            "expected_rs_momentum": weekly_mom
+        },
+        "daily": {
+            "expected_rs_ratio": daily_ratio,
+            "expected_rs_momentum": daily_mom
+        }
     }
     
     out_path = Path(__file__).parent / "ref_data.json"

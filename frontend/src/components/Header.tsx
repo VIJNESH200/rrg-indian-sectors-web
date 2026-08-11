@@ -25,7 +25,7 @@ export const Header: React.FC<HeaderProps> = ({
       <span className="text-slate-400 font-medium">NSE Sector Rotation</span>
       <span className="text-white/15">·</span>
       <span className="text-slate-400 font-medium">
-        {timeframe === "1d" ? "Daily (1Y)" : "Weekly"}
+        {timeframe === "1d" ? "Daily (1Y) · 20D Smooth" : "Weekly"}
       </span>
       {latestDate && (
         <>

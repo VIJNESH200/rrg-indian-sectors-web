@@ -1,6 +1,7 @@
 /**
  * Relative Rotation Graph (RRG) Engine in TypeScript
- * Exact port of pandas rolling mean/std (ddof=0) and JdK RRG formulas.
+ * Exact port of pandas rolling mean/std (ddof=0) and JdK RRG formulas,
+ * with optional causal EMA smoothing for Daily RRG.
  */
 
 export interface RrgConfig {
@@ -8,16 +9,34 @@ export interface RrgConfig {
   sectors: string[];
   rollingWindow: number;
   tailPeriods: number;
+  timeframe?: "1wk" | "1d";
+  rsEmaPeriod?: number;   // e.g. 20 for Daily RRG
+  momEmaPeriod?: number;  // e.g. 5 for Daily RRG
 }
 
 import { ALL_SECTORS } from "./sectors.js";
 
-export const DEFAULT_CONFIG: RrgConfig = {
+export const WEEKLY_RRG_CONFIG: RrgConfig = {
   benchmark: "^NSEI",
   sectors: ALL_SECTORS.map((s) => s.ticker),
   rollingWindow: 14,
   tailPeriods: 12,
+  timeframe: "1wk",
+  rsEmaPeriod: 0,
+  momEmaPeriod: 0,
 };
+
+export const DAILY_RRG_CONFIG: RrgConfig = {
+  benchmark: "^NSEI",
+  sectors: ALL_SECTORS.map((s) => s.ticker),
+  rollingWindow: 14,
+  tailPeriods: 12,
+  timeframe: "1d",
+  rsEmaPeriod: 20,
+  momEmaPeriod: 5,
+};
+
+export const DEFAULT_CONFIG: RrgConfig = WEEKLY_RRG_CONFIG;
 
 export interface RrgSectorMetrics {
   sector: string;
@@ -30,9 +49,44 @@ export interface RrgCalculationResult {
   dates: string[];
   benchmark: string;
   sectors: string[];
-  prices: Record<string, number[]>;
+  prices: Record<string, (number | null)[]>;
   metrics: Record<string, RrgSectorMetrics>;
   warnings: string[];
+}
+
+/**
+ * Calculates causal Exponential Moving Average (EMA) over a (number | null)[] series.
+ * Formula: alpha = 2 / (period + 1)
+ * EMA_t = alpha * value_t + (1 - alpha) * EMA_{t-1}
+ * The first non-null value initializes the EMA. Chronological, no lookahead bias.
+ */
+export function calculateEma(
+  series: (number | null)[],
+  period: number
+): (number | null)[] {
+  const n = series.length;
+  const result: (number | null)[] = new Array(n).fill(null);
+  if (period <= 1 || n === 0) return [...series];
+
+  const alpha = 2 / (period + 1);
+  let prevEma: number | null = null;
+
+  for (let i = 0; i < n; i++) {
+    const val = series[i];
+    if (val === null || val === undefined || Number.isNaN(val)) {
+      result[i] = null;
+      prevEma = null; // Reset EMA continuity on missing values
+    } else {
+      if (prevEma === null) {
+        prevEma = val;
+      } else {
+        prevEma = alpha * val + (1 - alpha) * prevEma;
+      }
+      result[i] = prevEma;
+    }
+  }
+
+  return result;
 }
 
 /**
@@ -121,7 +175,7 @@ export function pctChange(series: (number | null)[]): (number | null)[] {
 }
 
 /**
- * Computes 4-week forward return: (Price_{t+4} - Price_t) / Price_t
+ * Computes 4-period forward return: (Price_{t+4} - Price_t) / Price_t
  * If t + 4 >= N or prices are null, returns null (Pending).
  */
 export function computeForward4wReturn(prices: (number | null)[]): (number | null)[] {
@@ -200,9 +254,25 @@ export function computeRrgMetrics(
       }
     }
 
-    const rsRatio = zscoreTo100(rs, config.rollingWindow);
+    // 1. Optional RS EMA smoothing (e.g., 20-period for Daily RRG)
+    const rsSmoothed =
+      config.rsEmaPeriod && config.rsEmaPeriod > 0
+        ? calculateEma(rs, config.rsEmaPeriod)
+        : rs;
+
+    // 2. Compute RS-Ratio
+    const rsRatio = zscoreTo100(rsSmoothed, config.rollingWindow);
+
+    // 3. Compute 1-period ROC & raw RS-Momentum
     const rsRatioRoc = pctChange(rsRatio);
-    const rsMomentum = zscoreTo100(rsRatioRoc, config.rollingWindow);
+    const rsMomentumRaw = zscoreTo100(rsRatioRoc, config.rollingWindow);
+
+    // 4. Optional RS-Momentum EMA smoothing (e.g., 5-period for Daily RRG)
+    const rsMomentum =
+      config.momEmaPeriod && config.momEmaPeriod > 0
+        ? calculateEma(rsMomentumRaw, config.momEmaPeriod)
+        : rsMomentumRaw;
+
     const forward4wReturn = computeForward4wReturn(sectorPrices);
 
     metrics[sector] = {

@@ -4,6 +4,7 @@ import {
   pctChange,
   computeForward4wReturn,
   computeRrgMetrics,
+  calculateEma,
   DEFAULT_CONFIG,
 } from "../src/rrg_engine.js";
 
@@ -89,5 +90,15 @@ describe("RRG Engine - Mathematical Invariants & Edge Cases", () => {
     expect(res.warnings.length).toBeGreaterThan(0);
     expect(res.warnings[0]).toContain("returned empty price data");
     expect(res.metrics["^NSEBANK"]).toBeUndefined();
+  });
+
+  it("should compute causal 20d and 5d EMA without lookahead bias", () => {
+    const data = [1.0, 1.2, 1.1, 1.3, 1.4];
+    const ema20 = calculateEma(data, 20);
+
+    // Alpha = 2 / 21
+    expect(ema20[0]).toBe(1.0);
+    expect(ema20[1]).toBeCloseTo(1.0190476);
+    expect(ema20[2]).toBeCloseTo(1.0267573);
   });
 });

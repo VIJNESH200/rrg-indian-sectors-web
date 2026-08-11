@@ -58,6 +58,7 @@ export function App() {
   const handleTimeframeChange = (tf: "1wk" | "1d") => {
     if (tf === timeframe) return;
     setTimeframe(tf);
+    setTailLength(tf === "1d" ? 20 : 8);
     load(false, tf);
   };
 

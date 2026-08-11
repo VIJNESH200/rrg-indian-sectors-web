@@ -1,5 +1,5 @@
 import { fetchAllPrices } from "./fetcher.js";
-import { computeRrgMetrics, DEFAULT_CONFIG } from "./rrg_engine.js";
+import { computeRrgMetrics, WEEKLY_RRG_CONFIG, DAILY_RRG_CONFIG } from "./rrg_engine.js";
 
 export interface Env {
   RRG_CACHE?: any;
@@ -7,15 +7,16 @@ export interface Env {
   ALLOWED_ORIGIN?: string;
 }
 
-const CACHE_KEY_1WK = "rrg_latest_metrics_1wk_v2";
-const CACHE_KEY_1D  = "rrg_latest_metrics_1d_v2";
+const CACHE_KEY_1WK = "rrg_latest_metrics_1wk_v3";
+const CACHE_KEY_1D  = "rrg_latest_metrics_1d_v3";
 const CACHE_TTL_SECONDS = 86400; // 24 hours KV TTL
 
 export async function computeAndCacheRrgData(env: Env, interval: "1wk" | "1d" = "1wk") {
   console.log(`Computing fresh RRG data (${interval}) from Yahoo Finance...`);
   const range = interval === "1d" ? "1y" : "5y";
   const fetchResult = await fetchAllPrices({ range, interval });
-  const computed = computeRrgMetrics(fetchResult.dates, fetchResult.prices, DEFAULT_CONFIG);
+  const config = interval === "1d" ? DAILY_RRG_CONFIG : WEEKLY_RRG_CONFIG;
+  const computed = computeRrgMetrics(fetchResult.dates, fetchResult.prices, config);
 
   const payload = {
     ...computed,

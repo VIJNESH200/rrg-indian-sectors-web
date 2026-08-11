@@ -1,6 +1,10 @@
 import * as fs from "fs";
 import * as path from "path";
-import { computeRrgMetrics, DEFAULT_CONFIG } from "../worker/src/rrg_engine.js";
+import {
+  computeRrgMetrics,
+  WEEKLY_RRG_CONFIG,
+  DAILY_RRG_CONFIG,
+} from "../worker/src/rrg_engine.js";
 
 function verifyMath() {
   const refPath = path.resolve("scripts/ref_data.json");
@@ -12,26 +16,27 @@ function verifyMath() {
   const refData = JSON.parse(fs.readFileSync(refPath, "utf-8"));
   console.log(`Loaded reference dataset with ${refData.dates.length} dates and ${refData.sectors.length} sectors.`);
 
-  const tsResult = computeRrgMetrics(refData.dates, refData.prices, {
-    ...DEFAULT_CONFIG,
+  let globalMismatches = 0;
+  let globalMaxDiffRatio = 0;
+  let globalMaxDiffMom = 0;
+
+  // 1. VERIFY WEEKLY COMPUTATIONS
+  console.log("\n==========================================");
+  console.log(" 1. VERIFYING WEEKLY COMPUTATIONS (UNSMOOTHED)");
+  console.log("==========================================");
+
+  const weeklyResult = computeRrgMetrics(refData.dates, refData.prices, {
+    ...WEEKLY_RRG_CONFIG,
     benchmark: refData.benchmark,
     sectors: refData.sectors,
   });
 
-  let maxDiffRatio = 0;
-  let maxDiffMom = 0;
-  let totalComparedRatio = 0;
-  let totalComparedMom = 0;
-  let mismatches = 0;
-
-  console.log("\n--- COMPARING PYTHON VS TYPESCRIPT COMPUTATIONS ---");
+  let weeklyRatioCount = 0;
+  let weeklyMomCount = 0;
 
   for (const sector of refData.sectors) {
-    const pyRatio: (number | null)[] = refData.expected_rs_ratio[sector];
-    const pyMom: (number | null)[] = refData.expected_rs_momentum[sector];
-
-    const tsRatio = tsResult.metrics[sector].rsRatio;
-    const tsMom = tsResult.metrics[sector].rsMomentum;
+    const pyRatio: (number | null)[] = refData.weekly.expected_rs_ratio[sector];
+    const pyMom: (number | null)[] = refData.weekly.expected_rs_momentum[sector];
 
     let sectorMaxRatioDiff = 0;
     let sectorMaxMomDiff = 0;
@@ -41,44 +46,106 @@ function verifyMath() {
       const pR = pyRatio[i];
       const pM = pyMom[i];
 
-      const tsIdx = tsResult.dates.indexOf(date);
-      if (tsIdx === -1) continue; // Skip dates prior to burn-in cutIdx
+      const tsIdx = weeklyResult.dates.indexOf(date);
+      if (tsIdx === -1) continue;
 
-      const tR = tsResult.metrics[sector].rsRatio[tsIdx];
-      const tM = tsResult.metrics[sector].rsMomentum[tsIdx];
+      const tR = weeklyResult.metrics[sector].rsRatio[tsIdx];
+      const tM = weeklyResult.metrics[sector].rsMomentum[tsIdx];
 
-      // Compare RS-Ratio
       if (pR !== null && pR !== undefined && tR !== null) {
         const diff = Math.abs(pR - tR);
         if (diff > sectorMaxRatioDiff) sectorMaxRatioDiff = diff;
-        if (diff > maxDiffRatio) maxDiffRatio = diff;
-        totalComparedRatio++;
+        if (diff > globalMaxDiffRatio) globalMaxDiffRatio = diff;
+        weeklyRatioCount++;
+      } else if ((pR === null) !== (tR === null)) {
+        console.error(`[WEEKLY MISMATCH] ${sector} RS-Ratio @ ${date}: Py=${pR}, TS=${tR}`);
+        globalMismatches++;
       }
 
-      // Compare RS-Momentum
       if (pM !== null && pM !== undefined && tM !== null) {
         const diff = Math.abs(pM - tM);
         if (diff > sectorMaxMomDiff) sectorMaxMomDiff = diff;
-        if (diff > maxDiffMom) maxDiffMom = diff;
-        totalComparedMom++;
+        if (diff > globalMaxDiffMom) globalMaxDiffMom = diff;
+        weeklyMomCount++;
+      } else if ((pM === null) !== (tM === null)) {
+        console.error(`[WEEKLY MISMATCH] ${sector} RS-Mom @ ${date}: Py=${pM}, TS=${tM}`);
+        globalMismatches++;
       }
     }
 
     console.log(
-      `Sector ${sector.padEnd(12)} -> Max RS-Ratio diff: ${sectorMaxRatioDiff.toExponential(4)}, Max RS-Mom diff: ${sectorMaxMomDiff.toExponential(4)}`
+      `Weekly Sector ${sector.padEnd(12)} -> Max RS-Ratio diff: ${sectorMaxRatioDiff.toExponential(4)}, Max RS-Mom diff: ${sectorMaxMomDiff.toExponential(4)}`
+    );
+  }
+
+  // 2. VERIFY DAILY COMPUTATIONS (20d RS EMA + 5d RS-Mom EMA)
+  console.log("\n==========================================");
+  console.log(" 2. VERIFYING DAILY COMPUTATIONS (20d RS EMA + 5d MOM EMA)");
+  console.log("==========================================");
+
+  const dailyResult = computeRrgMetrics(refData.dates, refData.prices, {
+    ...DAILY_RRG_CONFIG,
+    benchmark: refData.benchmark,
+    sectors: refData.sectors,
+  });
+
+  let dailyRatioCount = 0;
+  let dailyMomCount = 0;
+
+  for (const sector of refData.sectors) {
+    const pyRatio: (number | null)[] = refData.daily.expected_rs_ratio[sector];
+    const pyMom: (number | null)[] = refData.daily.expected_rs_momentum[sector];
+
+    let sectorMaxRatioDiff = 0;
+    let sectorMaxMomDiff = 0;
+
+    for (let i = 0; i < refData.dates.length; i++) {
+      const date = refData.dates[i];
+      const pR = pyRatio[i];
+      const pM = pyMom[i];
+
+      const tsIdx = dailyResult.dates.indexOf(date);
+      if (tsIdx === -1) continue;
+
+      const tR = dailyResult.metrics[sector].rsRatio[tsIdx];
+      const tM = dailyResult.metrics[sector].rsMomentum[tsIdx];
+
+      if (pR !== null && pR !== undefined && tR !== null) {
+        const diff = Math.abs(pR - tR);
+        if (diff > sectorMaxRatioDiff) sectorMaxRatioDiff = diff;
+        if (diff > globalMaxDiffRatio) globalMaxDiffRatio = diff;
+        dailyRatioCount++;
+      } else if ((pR === null) !== (tR === null)) {
+        console.error(`[DAILY MISMATCH] ${sector} RS-Ratio @ ${date}: Py=${pR}, TS=${tR}`);
+        globalMismatches++;
+      }
+
+      if (pM !== null && pM !== undefined && tM !== null) {
+        const diff = Math.abs(pM - tM);
+        if (diff > sectorMaxMomDiff) sectorMaxMomDiff = diff;
+        if (diff > globalMaxDiffMom) globalMaxDiffMom = diff;
+        dailyMomCount++;
+      } else if ((pM === null) !== (tM === null)) {
+        console.error(`[DAILY MISMATCH] ${sector} RS-Mom @ ${date}: Py=${pM}, TS=${tM}`);
+        globalMismatches++;
+      }
+    }
+
+    console.log(
+      `Daily Sector ${sector.padEnd(12)} -> Max RS-Ratio diff: ${sectorMaxRatioDiff.toExponential(4)}, Max RS-Mom diff: ${sectorMaxMomDiff.toExponential(4)}`
     );
   }
 
   console.log("\n--- SUMMARY RESULTS ---");
-  console.log(`Total RS-Ratio data points verified: ${totalComparedRatio}`);
-  console.log(`Total RS-Momentum data points verified: ${totalComparedMom}`);
-  console.log(`Max RS-Ratio Absolute Error: ${maxDiffRatio.toExponential(6)}`);
-  console.log(`Max RS-Momentum Absolute Error: ${maxDiffMom.toExponential(6)}`);
-  console.log(`Null/NaN structure mismatches: ${mismatches}`);
+  console.log(`Weekly Data Points Verified: RS-Ratio=${weeklyRatioCount}, RS-Mom=${weeklyMomCount}`);
+  console.log(`Daily Data Points Verified:  RS-Ratio=${dailyRatioCount}, RS-Mom=${dailyMomCount}`);
+  console.log(`Max RS-Ratio Absolute Error: ${globalMaxDiffRatio.toExponential(6)}`);
+  console.log(`Max RS-Momentum Absolute Error: ${globalMaxDiffMom.toExponential(6)}`);
+  console.log(`Null/NaN structure mismatches: ${globalMismatches}`);
 
   const TOLERANCE = 1e-6;
-  if (mismatches === 0 && maxDiffRatio < TOLERANCE && maxDiffMom < TOLERANCE) {
-    console.log("\nPHASE 1.3 MATHEMATICAL VERIFICATION: SUCCESS (MATCHES TO 6+ DECIMAL PLACES)");
+  if (globalMismatches === 0 && globalMaxDiffRatio < TOLERANCE && globalMaxDiffMom < TOLERANCE) {
+    console.log("\nPHASE 1.3 MATHEMATICAL VERIFICATION: SUCCESS (MATCHES TO 6+ DECIMAL PLACES FOR BOTH WEEKLY AND DAILY)");
     process.exit(0);
   } else {
     console.error("\nPHASE 1.3 MATHEMATICAL VERIFICATION: FAILED");
