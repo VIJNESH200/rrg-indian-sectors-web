@@ -7,7 +7,16 @@ export default defineConfig({
     port: 3000,
     proxy: {
       '/api': {
-        target: 'http://localhost:8787',
+        target: 'https://rrg-indian-sectors-api.rrg-indian-sectors.workers.dev',
+        changeOrigin: true,
+      },
+    },
+  },
+  preview: {
+    port: 4173,
+    proxy: {
+      '/api': {
+        target: 'https://rrg-indian-sectors-api.rrg-indian-sectors.workers.dev',
         changeOrigin: true,
       },
     },

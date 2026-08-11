@@ -41,7 +41,6 @@ async function getOrComputeRrgData(env: Env, ctx?: any, forceRefresh: boolean = 
     try {
       const cached = await env.RRG_CACHE.get(CACHE_KEY, "json");
       if (cached) {
-        // If data is older than 4 hours, serve stale immediately and trigger background refresh via ctx.waitUntil
         const ageMs = cached.updatedAt ? Date.now() - new Date(cached.updatedAt).getTime() : 0;
         const STALE_THRESHOLD_MS = 4 * 3600 * 1000;
 
@@ -64,20 +63,23 @@ async function getOrComputeRrgData(env: Env, ctx?: any, forceRefresh: boolean = 
 
 function getCorsHeaders(request: Request, env: Env) {
   const requestOrigin = request.headers.get("Origin") || "";
-  let allowedOrigin = "";
+  let allowedOrigin = "*";
 
-  if (env.ENVIRONMENT !== "production") {
-    allowedOrigin = "*";
-  } else {
-    // ALLOWED_ORIGIN may contain a comma-separated allowlist, e.g.
-    // "https://rrg-indian-sectors.pages.dev,http://localhost:4173"
-    const configuredOrigins = (env.ALLOWED_ORIGIN || "")
-      .split(",")
-      .map((origin) => origin.trim())
-      .filter(Boolean);
+  const isLocalhost =
+    requestOrigin.startsWith("http://localhost:") ||
+    requestOrigin.startsWith("http://127.0.0.1:");
 
-    if (requestOrigin && configuredOrigins.includes(requestOrigin)) {
+  const isPagesDev = requestOrigin.endsWith(".pages.dev");
+
+  if (env.ENVIRONMENT === "production") {
+    if (env.ALLOWED_ORIGIN && requestOrigin === env.ALLOWED_ORIGIN) {
+      allowedOrigin = env.ALLOWED_ORIGIN;
+    } else if (isPagesDev || isLocalhost) {
       allowedOrigin = requestOrigin;
+    } else if (env.ALLOWED_ORIGIN) {
+      allowedOrigin = env.ALLOWED_ORIGIN;
+    } else {
+      allowedOrigin = "";
     }
   }
 
@@ -103,7 +105,6 @@ export default {
       return new Response(null, { headers: corsHeaders });
     }
 
-    // Diagnostic endpoint: disabled in production for security
     if (url.pathname === "/api/test-yahoo") {
       if (env.ENVIRONMENT === "production") {
         return new Response(
