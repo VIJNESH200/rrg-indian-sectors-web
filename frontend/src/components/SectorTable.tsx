@@ -36,14 +36,14 @@ export const SectorTable: React.FC<Props> = ({
   return (
     <div className="card overflow-hidden">
       <div className="overflow-x-auto">
-        <table className="sec-table">
+        <table className="sec-table table-fixed w-full">
           <thead>
             <tr style={{ background: "var(--bg-raised)" }}>
-              <th>Sector</th>
-              <th>Quadrant</th>
-              <th className="text-right">RS-Ratio</th>
-              <th className="text-right">RS-Mom</th>
-              <th className="text-right">4W Fwd Return</th>
+              <th className="w-[30%] text-left text-slate-300">Sector</th>
+              <th className="w-[18%] text-left text-slate-300">Quadrant</th>
+              <th className="w-[16%] text-right text-slate-300">RS-Ratio</th>
+              <th className="w-[16%] text-right text-slate-300">RS-Mom</th>
+              <th className="w-[20%] text-right text-slate-300">4W Fwd Return</th>
             </tr>
           </thead>
           <tbody>
@@ -59,41 +59,41 @@ export const SectorTable: React.FC<Props> = ({
                   className={isSel ? "row-selected" : ""}
                 >
                   {/* Sector name + colour dot */}
-                  <td>
+                  <td className="w-[30%] text-left">
                     <div className="flex items-center gap-2">
-                      <span className="w-2 h-2 rounded-full shrink-0" style={{ background: color }} />
-                      <span className="text-slate-200 font-medium text-[12px]">
+                      <span className="w-2.5 h-2.5 rounded-full shrink-0 shadow-sm" style={{ background: color }} />
+                      <span className="text-slate-100 font-semibold text-[12px]">
                         {getSectorName(sec)}
                       </span>
                     </div>
                   </td>
 
                   {/* Quadrant badge */}
-                  <td>
+                  <td className="w-[18%] text-left">
                     {quadrant && (
                       <span className={`qbadge ${qClass(quadrant)}`}>{quadrant}</span>
                     )}
                   </td>
 
                   {/* RS-Ratio */}
-                  <td className="text-right font-mono text-[12px]">
-                    <span className={ratio != null ? (ratio >= 100 ? "text-emerald-400" : "text-rose-400") : "text-slate-600"}>
+                  <td className="w-[16%] text-right font-mono text-[12px]">
+                    <span className={ratio != null ? (ratio >= 100 ? "text-emerald-400 font-bold" : "text-rose-400 font-bold") : "text-slate-400"}>
                       {ratio?.toFixed(2) ?? "—"}
                     </span>
                   </td>
 
                   {/* RS-Momentum */}
-                  <td className="text-right font-mono text-[12px]">
-                    <span className={mom != null ? (mom >= 100 ? "text-emerald-400" : "text-rose-400") : "text-slate-600"}>
+                  <td className="w-[16%] text-right font-mono text-[12px]">
+                    <span className={mom != null ? (mom >= 100 ? "text-emerald-400 font-bold" : "text-rose-400 font-bold") : "text-slate-400"}>
                       {mom?.toFixed(2) ?? "—"}
                     </span>
                   </td>
 
                   {/* 4W Forward Return */}
-                  <td className="text-right font-mono text-[12px]">
+                  <td className="w-[20%] text-right font-mono text-[12px]">
                     <div className="flex items-center justify-end gap-1.5">
-                      <Icon className={`w-3 h-3 ${isPending ? "text-slate-600" : fwd! >= 0 ? "text-emerald-400" : "text-rose-400"}`} />
-                      <span className={isPending ? "text-slate-600 text-[11px]" : fwd! >= 0 ? "text-emerald-400 font-semibold" : "text-rose-400 font-semibold"}>
+                      <Icon className={`w-3.5 h-3.5 ${isPending ? "text-slate-400" : fwd! >= 0 ? "text-emerald-400" : "text-rose-400"}`} />
+                      <span className={isPending ? "text-slate-400 text-[11px] font-medium" : fwd! >= 0 ? "text-emerald-400 font-bold" : "text-rose-400 font-bold"}>
                         {isPending ? "Pending" : `${fwd! >= 0 ? "+" : ""}${(fwd! * 100).toFixed(2)}%`}
                       </span>
                     </div>

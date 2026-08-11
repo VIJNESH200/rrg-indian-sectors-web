@@ -134,11 +134,11 @@ export function App() {
 
       {/* ── Footer ── */}
       <footer
-        className="shrink-0 px-5 py-3 flex justify-between items-center text-[11px] text-slate-700"
+        className="shrink-0 px-5 py-3 flex justify-between items-center text-[11px] text-slate-300 font-medium"
         style={{ borderTop: "1px solid var(--border)", maxWidth: 1440, margin: "0 auto", width: "100%" }}
       >
-        <span className="font-mono">RRG India · Weekly · Nifty 50 benchmark</span>
-        <span className="italic hidden sm:block">
+        <span className="font-mono text-slate-400">RRG India · Weekly · Nifty 50 benchmark</span>
+        <span className="italic text-slate-300 font-medium hidden sm:block">
           Historical forward returns are descriptive, not predictive.
         </span>
       </footer>

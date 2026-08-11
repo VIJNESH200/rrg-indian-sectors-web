@@ -86,7 +86,7 @@
 
   /* ── Stat label ── */
   .stat-label {
-    @apply text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-600;
+    @apply text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-300;
   }
 
   /* ── Horizontal gauge bar (like HEALTH / MOMENTUM meters) ── */
