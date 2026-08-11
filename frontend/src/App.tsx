@@ -35,6 +35,7 @@ export function App() {
           "^CNXPSUBANK",
           "NIFTY_PVT_BANK.NS",
           "^CNXSERVICE",
+          "^CNXINFRA",
         ]);
         setVisible(new Set(j.sectors.filter((s) => !DEFAULT_OFF_SECTORS.has(s))));
       }

@@ -33,10 +33,24 @@ export function getQuadrant(ratio: number, mom: number): QuadrantName {
 }
 
 /* ─── helpers ─── */
-interface Pt { x: number; y: number; ratio: number; mom: number; }
+interface Pt { x: number; y: number; ratio: number; mom: number; date: string; index: number; }
 interface LabelBox {
   sector: string; x: number; y: number; w: number; h: number;
   headX: number; headY: number; color: string; text: string; dimmed: boolean; selected: boolean;
+}
+
+export interface HoveredPointInfo {
+  canvasX: number;
+  canvasY: number;
+  sector: string;
+  date: string;
+  dateIndex: number;
+  ratio: number;
+  mom: number;
+  fwd: number | null;
+  quadrant: QuadrantName;
+  isHead: boolean;
+  weeksOffset: number;
 }
 
 export interface RRGChartProps {
@@ -57,11 +71,8 @@ export const RRGChartCanvas: React.FC<RRGChartProps> = ({
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  /* tooltip state */
-  const [tooltip, setTooltip] = useState<{
-    canvasX: number; canvasY: number; sector: string;
-    ratio: number; mom: number; fwd: number | null; quadrant: QuadrantName;
-  } | null>(null);
+  /* tooltip state for hovering ANY data point along trail */
+  const [hoveredPoint, setHoveredPoint] = useState<HoveredPointInfo | null>(null);
 
   /* ── axis bounds memoisation ── */
   const computeBounds = useCallback(() => {
@@ -108,9 +119,8 @@ export const RRGChartCanvas: React.FC<RRGChartProps> = ({
 
     const cx100 = toX(100), cy100 = toY(100);
 
-    /* ── 1. Quadrant fills (very subtle — matches macro-intelligence charcoal glows) ── */
+    /* ── 1. Quadrant fills (warmer, visible zones) ── */
     const fills: [number, number, number, number, string][] = [
-      // x, y, w, h, color — warmer, more visible zones
       [cx100, PT,      PL + PW - cx100, cy100 - PT,      "rgba(34,197,94,0.09)"],   // LEADING   top-right
       [cx100, cy100,   PL + PW - cx100, PT + PH - cy100, "rgba(251,146,60,0.09)"],  // WEAKENING bottom-right
       [PL,    cy100,   cx100 - PL,      PT + PH - cy100, "rgba(239,68,68,0.09)"],   // LAGGING   bottom-left
@@ -118,7 +128,7 @@ export const RRGChartCanvas: React.FC<RRGChartProps> = ({
     ];
     fills.forEach(([x, y, w, h, c]) => { ctx.fillStyle = c; ctx.fillRect(x, y, w, h); });
 
-    /* ── 2. Quadrant watermark labels (same style as EXPANSION / SLOWDOWN etc.) ── */
+    /* ── 2. Quadrant watermark labels ── */
     const watermarks: [string, number, number, CanvasTextAlign, CanvasTextBaseline, string][] = [
       ["LEADING",   PL + PW - 12, PT + 12,      "right", "top",    "rgba(34,197,94,0.35)"],
       ["WEAKENING", PL + PW - 12, PT + PH - 12, "right", "bottom", "rgba(251,146,60,0.35)"],
@@ -136,7 +146,6 @@ export const RRGChartCanvas: React.FC<RRGChartProps> = ({
     ctx.letterSpacing = "0";
 
     /* ── 3. Grid + 100 baselines ── */
-    /* Soft grid */
     ctx.strokeStyle = "rgba(255,255,255,0.04)";
     ctx.lineWidth = 1;
     ctx.setLineDash([]);
@@ -152,7 +161,6 @@ export const RRGChartCanvas: React.FC<RRGChartProps> = ({
       ctx.beginPath(); ctx.moveTo(PL, y); ctx.lineTo(PL + PW, y); ctx.stroke();
     }
 
-    /* 100 baselines — dashed, slightly brighter */
     ctx.strokeStyle = "rgba(255,255,255,0.18)";
     ctx.lineWidth = 1;
     ctx.setLineDash([4, 5]);
@@ -160,7 +168,6 @@ export const RRGChartCanvas: React.FC<RRGChartProps> = ({
     ctx.beginPath(); ctx.moveTo(PL, cy100); ctx.lineTo(PL + PW, cy100); ctx.stroke();
     ctx.setLineDash([]);
 
-    /* Plot frame */
     ctx.strokeStyle = "rgba(255,255,255,0.07)";
     ctx.lineWidth = 1;
     ctx.strokeRect(PL, PT, PW, PH);
@@ -181,7 +188,6 @@ export const RRGChartCanvas: React.FC<RRGChartProps> = ({
       ctx.fillText(v.toFixed(1), PL - 8, toY(v));
     }
 
-    /* Axis titles */
     ctx.fillStyle = "#6B7280";
     ctx.font = "11px Inter, sans-serif";
     ctx.textAlign = "center";
@@ -203,18 +209,18 @@ export const RRGChartCanvas: React.FC<RRGChartProps> = ({
       const m = data.metrics[sec]; if (!m) return;
       const color = getSectorColor(sec, sIdx);
       const isSel = selectedSector === sec;
-      const isHov = hoveredSector === sec;
+      const isHov = hoveredSector === sec || hoveredPoint?.sector === sec;
       const dimmed = (selectedSector != null && !isSel) || (hoveredSector != null && !isHov && !isSel);
 
       const pts: Pt[] = [];
       for (let i = startIdx; i <= selectedDateIndex; i++) {
         const r = m.rsRatio[i], mo = m.rsMomentum[i];
-        if (r != null && mo != null) pts.push({ x: toX(r), y: toY(mo), ratio: r, mom: mo });
+        if (r != null && mo != null) pts.push({ x: toX(r), y: toY(mo), ratio: r, mom: mo, date: data.dates[i], index: i });
       }
       if (pts.length === 0) return;
       const N = pts.length;
 
-      /* trail line — segment-by-segment fade */
+      /* trail line */
       for (let i = 0; i < N - 1; i++) {
         const t = (i + 1) / N;
         const alpha = dimmed ? (0.08 + 0.12 * t) : (0.12 + 0.88 * t);
@@ -228,7 +234,7 @@ export const RRGChartCanvas: React.FC<RRGChartProps> = ({
         ctx.stroke();
       }
 
-      /* history dots — larger, warmer */
+      /* history dots */
       for (let i = 0; i < N - 1; i++) {
         const t = (i + 1) / N;
         const alpha = dimmed ? 0.08 : (0.1 + 0.55 * t);
@@ -240,12 +246,12 @@ export const RRGChartCanvas: React.FC<RRGChartProps> = ({
         ctx.fill();
       }
 
-      /* head dot — EVERY head gets a warm radial glow */
+      /* head dot */
       const head = pts[N - 1];
       const hr = isSel ? 9 : isHov ? 8 : 6;
       ctx.globalAlpha = dimmed ? 0.3 : 1;
 
-      /* outer glow — always present, just bigger for selected */
+      /* outer glow */
       const glowR = isSel ? 22 : isHov ? 18 : 14;
       ctx.beginPath();
       ctx.arc(head.x, head.y, glowR, 0, Math.PI * 2);
@@ -304,7 +310,7 @@ export const RRGChartCanvas: React.FC<RRGChartProps> = ({
         ctx.beginPath(); ctx.moveTo(headX, headY); ctx.lineTo(x, y + h / 2); ctx.stroke();
       }
 
-      /* pill background — darker to match theme */
+      /* pill background */
       ctx.fillStyle = selected ? "#14161BF5" : "#0E1014EE";
       roundRect(ctx, x - 2, y - 1, w, h, 4);
       ctx.fill();
@@ -320,10 +326,30 @@ export const RRGChartCanvas: React.FC<RRGChartProps> = ({
       ctx.globalAlpha = 1;
     });
 
-  }, [data, selectedDateIndex, tailLength, visibleSectors, selectedSector, hoveredSector, computeBounds]);
+    /* ── 7. HIGHLIGHT SPECIFIC HOVERED TRAIL POINT ── */
+    if (hoveredPoint) {
+      const { canvasX, canvasY, sector, isHead } = hoveredPoint;
+      const color = getSectorColor(sector, data.sectors.indexOf(sector));
 
-  /* ── hit test helper ── */
-  const hitTest = useCallback((canvasX: number, canvasY: number) => {
+      // Draw crosshair halo around the exact hovered point
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = "#FFFFFF";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(canvasX, canvasY, isHead ? 11 : 7, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(canvasX, canvasY, isHead ? 14 : 10, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+  }, [data, selectedDateIndex, tailLength, visibleSectors, selectedSector, hoveredSector, hoveredPoint, computeBounds]);
+
+  /* ── hit test helper for ANY point along trail ── */
+  const hitTestPoint = useCallback((canvasX: number, canvasY: number): HoveredPointInfo | null => {
     const canvas = canvasRef.current; if (!canvas) return null;
     const rect = canvas.getBoundingClientRect();
     const W = rect.width, H = rect.height;
@@ -333,35 +359,60 @@ export const RRGChartCanvas: React.FC<RRGChartProps> = ({
     const toX = (v: number) => PL + ((v - x0) / (x1 - x0)) * PW;
     const toY = (v: number) => PT + (1 - (v - y0) / (y1 - y0)) * (H - PT - PB);
 
-    let best: string | null = null, bestDist = 24;
+    let best: HoveredPointInfo | null = null;
+    let bestDist = 18;
+
+    const startIdx = Math.max(0, selectedDateIndex - tailLength + 1);
+
     for (const sec of data.sectors) {
       if (!visibleSectors.has(sec)) continue;
       const m = data.metrics[sec]; if (!m) continue;
-      const r = m.rsRatio[selectedDateIndex], mo = m.rsMomentum[selectedDateIndex];
-      if (r == null || mo == null) continue;
-      const d = Math.hypot(canvasX - toX(r), canvasY - toY(mo));
-      if (d < bestDist) { bestDist = d; best = sec; }
+
+      for (let i = startIdx; i <= selectedDateIndex; i++) {
+        const r = m.rsRatio[i], mo = m.rsMomentum[i];
+        if (r == null || mo == null) continue;
+        const cx = toX(r), cy = toY(mo);
+        const d = Math.hypot(canvasX - cx, canvasY - cy);
+        if (d < bestDist) {
+          bestDist = d;
+          best = {
+            canvasX: cx,
+            canvasY: cy,
+            sector: sec,
+            date: data.dates[i],
+            dateIndex: i,
+            ratio: r,
+            mom: mo,
+            fwd: m.forward4wReturn[i],
+            quadrant: getQuadrant(r, mo),
+            isHead: i === selectedDateIndex,
+            weeksOffset: i - selectedDateIndex,
+          };
+        }
+      }
     }
+
     return best;
-  }, [data, selectedDateIndex, visibleSectors, computeBounds]);
+  }, [data, selectedDateIndex, tailLength, visibleSectors, computeBounds]);
 
   const handleClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const rect = canvasRef.current!.getBoundingClientRect();
-    onSelectSector(hitTest(e.clientX - rect.left, e.clientY - rect.top));
+    const pt = hitTestPoint(e.clientX - rect.left, e.clientY - rect.top);
+    onSelectSector(pt ? pt.sector : null);
   };
 
   const handleMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const rect = canvasRef.current!.getBoundingClientRect();
     const cx = e.clientX - rect.left, cy = e.clientY - rect.top;
-    const sec = hitTest(cx, cy);
-    onHoverSector(sec);
-    if (sec) {
-      const m = data.metrics[sec]!;
-      const r  = m.rsRatio[selectedDateIndex]!;
-      const mo = m.rsMomentum[selectedDateIndex]!;
-      setTooltip({ canvasX: cx, canvasY: cy, sector: sec, ratio: r, mom: mo,
-        fwd: m.forward4wReturn[selectedDateIndex], quadrant: getQuadrant(r, mo) });
-    } else { setTooltip(null); }
+    const pt = hitTestPoint(cx, cy);
+
+    if (pt) {
+      setHoveredPoint(pt);
+      onHoverSector(pt.sector);
+    } else {
+      setHoveredPoint(null);
+      onHoverSector(null);
+    }
   };
 
   const qClass = (q: QuadrantName) =>
@@ -376,39 +427,50 @@ export const RRGChartCanvas: React.FC<RRGChartProps> = ({
         style={{ background: "var(--bg-surface)", border: "1px solid var(--border)" }}
         onClick={handleClick}
         onMouseMove={handleMove}
-        onMouseLeave={() => { setTooltip(null); onHoverSector(null); }}
+        onMouseLeave={() => { setHoveredPoint(null); onHoverSector(null); }}
       />
 
-      {/* Tooltip — styled like the macro-intelligence data callout */}
-      {tooltip && (
+      {/* Tooltip for ANY hovered datapoint along trail */}
+      {hoveredPoint && (
         <div
           className="pointer-events-none absolute z-40"
           style={{
-            left: Math.min(tooltip.canvasX + 14, 640),
-            top: Math.max(tooltip.canvasY - 10, 8),
+            left: Math.min(hoveredPoint.canvasX + 14, 640),
+            top: Math.max(hoveredPoint.canvasY - 10, 8),
           }}
         >
           <div
-            className="rounded-lg p-3 shadow-2xl min-w-[160px]"
+            className="rounded-lg p-3 shadow-2xl min-w-[175px]"
             style={{ background: "var(--bg-raised)", border: "1px solid var(--border-md)" }}
           >
-            <div className="flex items-center justify-between gap-3 mb-2">
-              <span className="font-bold text-[13px] text-white">{getSectorName(tooltip.sector)}</span>
-              <span className={`qbadge ${qClass(tooltip.quadrant)}`}>{tooltip.quadrant}</span>
+            {/* Header: Sector Name + Quadrant Badge */}
+            <div className="flex items-center justify-between gap-3 mb-1">
+              <span className="font-bold text-[13px] text-white">{getSectorName(hoveredPoint.sector)}</span>
+              <span className={`qbadge ${qClass(hoveredPoint.quadrant)}`}>{hoveredPoint.quadrant}</span>
             </div>
+
+            {/* Date & Point Type */}
+            <div className="flex items-center justify-between gap-2 mb-2 pb-1.5 border-b border-white/10">
+              <span className="font-mono text-[11px] text-blue-400 font-semibold">{hoveredPoint.date}</span>
+              <span className="text-[10px] text-slate-400 font-mono">
+                {hoveredPoint.isHead ? "Latest Head" : `${hoveredPoint.weeksOffset}W trail point`}
+              </span>
+            </div>
+
+            {/* Metrics */}
             <div className="flex flex-col gap-1 font-mono text-[11px]">
               <div className="flex justify-between gap-4">
-                <span className="text-slate-500">RS-Ratio</span>
-                <span className="text-slate-100 font-semibold">{tooltip.ratio.toFixed(2)}</span>
+                <span className="text-slate-400">RS-Ratio</span>
+                <span className="text-slate-100 font-semibold">{hoveredPoint.ratio.toFixed(2)}</span>
               </div>
               <div className="flex justify-between gap-4">
-                <span className="text-slate-500">RS-Momentum</span>
-                <span className="text-slate-100 font-semibold">{tooltip.mom.toFixed(2)}</span>
+                <span className="text-slate-400">RS-Momentum</span>
+                <span className="text-slate-100 font-semibold">{hoveredPoint.mom.toFixed(2)}</span>
               </div>
               <div className="flex justify-between gap-4 pt-1.5" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
-                <span className="text-slate-500">4W Return</span>
-                <span className={`font-semibold ${tooltip.fwd == null ? "text-slate-600" : tooltip.fwd >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
-                  {tooltip.fwd == null ? "Pending" : `${tooltip.fwd >= 0 ? "+" : ""}${(tooltip.fwd * 100).toFixed(2)}%`}
+                <span className="text-slate-400">4W Return</span>
+                <span className={`font-semibold ${hoveredPoint.fwd == null ? "text-slate-500" : hoveredPoint.fwd >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+                  {hoveredPoint.fwd == null ? "Pending" : `${hoveredPoint.fwd >= 0 ? "+" : ""}${(hoveredPoint.fwd * 100).toFixed(2)}%`}
                 </span>
               </div>
             </div>
@@ -428,8 +490,6 @@ function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
   ctx.lineTo(x + w, y + h - r);
   ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
   ctx.lineTo(x + r, y + h);
-  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
-  ctx.lineTo(x, y + r);
   ctx.quadraticCurveTo(x, y, x + r, y);
   ctx.closePath();
 }
