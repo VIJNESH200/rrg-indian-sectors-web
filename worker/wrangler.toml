@@ -4,7 +4,7 @@ compatibility_date = "2024-01-01"
 
 [vars]
 ENVIRONMENT = "production"
-ALLOWED_ORIGIN = "https://rrg-indian-sectors.pages.dev"
+ALLOWED_ORIGIN = "https://rrg-indian-sectors.pages.dev,http://localhost:4173"
 
 # KV Cache Binding for computed RRG Data
 # Execute `npx wrangler kv:namespace create RRG_CACHE` and replace the id below before deploying:
