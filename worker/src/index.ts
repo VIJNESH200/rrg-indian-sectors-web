@@ -64,16 +64,20 @@ async function getOrComputeRrgData(env: Env, ctx?: any, forceRefresh: boolean = 
 
 function getCorsHeaders(request: Request, env: Env) {
   const requestOrigin = request.headers.get("Origin") || "";
-  let allowedOrigin = "*";
+  let allowedOrigin = "";
 
-  if (env.ENVIRONMENT === "production") {
-    if (env.ALLOWED_ORIGIN) {
-      allowedOrigin = env.ALLOWED_ORIGIN;
-    } else if (requestOrigin && (requestOrigin.endsWith(".pages.dev") || requestOrigin.includes("localhost"))) {
+  if (env.ENVIRONMENT !== "production") {
+    allowedOrigin = "*";
+  } else {
+    // ALLOWED_ORIGIN may contain a comma-separated allowlist, e.g.
+    // "https://rrg-indian-sectors.pages.dev,http://localhost:4173"
+    const configuredOrigins = (env.ALLOWED_ORIGIN || "")
+      .split(",")
+      .map((origin) => origin.trim())
+      .filter(Boolean);
+
+    if (requestOrigin && configuredOrigins.includes(requestOrigin)) {
       allowedOrigin = requestOrigin;
-    } else {
-      // Fail closed in production: do not reflect untrusted origins
-      allowedOrigin = "";
     }
   }
 
