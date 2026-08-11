@@ -21,7 +21,8 @@ export function App() {
     setLoading(true);
     setError(null);
     try {
-      const url = refresh ? "/api/rrg-data?refresh=true" : "/api/rrg-data";
+      const apiBase = import.meta.env.VITE_API_URL || "/api/rrg-data";
+      const url = refresh ? `${apiBase}${apiBase.includes("?") ? "&" : "?"}refresh=true` : apiBase;
       const res = await fetch(url);
       if (!res.ok) {
         throw new Error(`API returned HTTP ${res.status}`);

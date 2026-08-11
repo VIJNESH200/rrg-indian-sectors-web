@@ -63,15 +63,31 @@ async function getOrComputeRrgData(env: Env, ctx?: any, forceRefresh: boolean = 
 }
 
 function getCorsHeaders(request: Request, env: Env) {
-  const requestOrigin = request.headers.get("Origin") || "*";
-  const allowedOrigin = env.ALLOWED_ORIGIN || (env.ENVIRONMENT === "production" ? requestOrigin : "*");
+  const requestOrigin = request.headers.get("Origin") || "";
+  let allowedOrigin = "*";
 
-  return {
-    "Access-Control-Allow-Origin": allowedOrigin,
+  if (env.ENVIRONMENT === "production") {
+    if (env.ALLOWED_ORIGIN) {
+      allowedOrigin = env.ALLOWED_ORIGIN;
+    } else if (requestOrigin && (requestOrigin.endsWith(".pages.dev") || requestOrigin.includes("localhost"))) {
+      allowedOrigin = requestOrigin;
+    } else {
+      // Fail closed in production: do not reflect untrusted origins
+      allowedOrigin = "";
+    }
+  }
+
+  const headers: Record<string, string> = {
     "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type",
     "Content-Type": "application/json",
   };
+
+  if (allowedOrigin) {
+    headers["Access-Control-Allow-Origin"] = allowedOrigin;
+  }
+
+  return headers;
 }
 
 export default {
