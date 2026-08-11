@@ -50,6 +50,8 @@ jobs:
 
       - name: Build Frontend Assets
         run: cd frontend && npm run build
+        env:
+          VITE_API_URL: https://rrg-indian-sectors-api.rrg-indian-sectors.workers.dev/api/rrg-data
 
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
