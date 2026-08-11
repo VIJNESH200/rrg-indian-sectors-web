@@ -91,8 +91,11 @@ export async function fetchAllPrices(options: FetcherOptions = {}): Promise<Fetc
     throw new Error(`Critical Error: Benchmark ticker ${BENCHMARK_TICKER} price data could not be fetched.`);
   }
 
-  // Get sorted list of dates from benchmark
-  const sortedDates = Array.from(benchResult.dateMap.keys()).sort();
+  // Get sorted list of dates from benchmark (excluding 2021-08-08 to 2022-02-06)
+  const rawDates = Array.from(benchResult.dateMap.keys()).sort();
+  const sortedDates = rawDates.filter(
+    (d) => !(d >= "2021-08-08" && d <= "2022-02-06")
+  );
   const prices: Record<string, (number | null)[]> = {};
 
   for (const res of fetchResults) {
