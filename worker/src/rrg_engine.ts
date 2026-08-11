@@ -213,12 +213,33 @@ export function computeRrgMetrics(
     };
   }
 
+  // Filter out pre-history data points up to 2022-08-14 so every returned date has 100% valid non-null metrics
+  const cutIdx = dates.findIndex((d) => d > "2022-08-14");
+  const validCutIdx = cutIdx !== -1 ? cutIdx : 0;
+
+  const slicedDates = dates.slice(validCutIdx);
+  const slicedMetrics: Record<string, RrgSectorMetrics> = {};
+  const slicedPrices: Record<string, (number | null)[]> = {};
+
+  for (const [sec, m] of Object.entries(metrics)) {
+    slicedMetrics[sec] = {
+      sector: sec,
+      rsRatio: m.rsRatio.slice(validCutIdx),
+      rsMomentum: m.rsMomentum.slice(validCutIdx),
+      forward4wReturn: m.forward4wReturn.slice(validCutIdx),
+    };
+  }
+
+  for (const [sec, pList] of Object.entries(prices)) {
+    slicedPrices[sec] = pList.slice(validCutIdx);
+  }
+
   return {
-    dates,
+    dates: slicedDates,
     benchmark: config.benchmark,
-    sectors: config.sectors.filter((s) => metrics[s] !== undefined),
-    prices,
-    metrics,
+    sectors: config.sectors.filter((s) => slicedMetrics[s] !== undefined),
+    prices: slicedPrices,
+    metrics: slicedMetrics,
     warnings,
   };
 }
