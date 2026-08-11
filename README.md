@@ -6,18 +6,34 @@ A standalone high-performance web platform that computes and visualizes Relative
 
 ---
 
+## Key Features
+
+- **Dual Timeframe Support (Weekly & Daily)**: Seamlessly toggle between Weekly multi-year sector rotation and Daily (1 Year) short-term sector rotation.
+- **Causal Daily RRG EMA Smoothing**: Eliminates high-frequency daily market noise without lookahead bias using a 20-trading-day RS EMA + 5-trading-day RS-Momentum EMA.
+- **Interactive Rotation Trails & Hover Stats**: Full historical playback animation, interactive trail point hover halos, and real-time metric tooltips (RS-Ratio, RS-Momentum, 4W/4D Forward Return, Date, Quadrant).
+- **One-Click CSV / Excel Data Export**: Instant browser download of complete dataset observations for spreadsheet analysis.
+- **14 Pure NSE Sector Indices**: Standardized, alphabetically sorted sector universe covering Auto, Bank, Energy, Fin Service, FMCG, Infra, IT, Media, Metal, Pharma, PSU Bank, Pvt Bank, Realty, and Services.
+- **High-Contrast Dark Charcoal UI**: Custom OLED-friendly visual design system with clear section borders and responsive controls.
+
+---
+
 ## Architecture Diagram
 
 ```mermaid
 flowchart TD
     subgraph Client [Cloudflare Pages Frontend]
         UI[React / Vite App]
+        Header[Header & Timeframe Switcher]
         Canvas[HTML5 Canvas RRG Chart]
-        Scrubber[Timeline Scrubber]
-        Panel[Sector Detail & 4-Wk Forward Return Panel]
+        Scrubber[Timeline & Trail Scrubber]
+        Panel[Pinned Sector Card & Metrics Table]
+        Export[CSV / Excel Exporter]
+
+        UI --> Header
         UI --> Canvas
         UI --> Scrubber
         UI --> Panel
+        UI --> Export
     end
 
     subgraph Backend [Cloudflare Workers API]
@@ -38,17 +54,17 @@ flowchart TD
         YF[Yahoo Finance API v8 Chart Endpoint]
     end
 
-    UI -->|GET /api/rrg-data| Worker
+    UI -->|GET /api/rrg-data?interval=1wk or 1d| Worker
     Fetcher -->|"v8/finance/chart/:ticker"| YF
 ```
 
 ---
 
-## Methodology
+## Methodology & Calculation Engine
 
-Relative Rotation Graphs (RRG), originally developed by Julius de Kempenaer (JdK), track the relative strength and momentum of multiple asset classes or industry sectors against a common benchmark index (in this platform, **Nifty 50 / `^NSEI`**).
+Relative Rotation Graphs (RRG), originally developed by Julius de Kempenaer (JdK), track the relative strength and momentum of multiple asset classes or industry sectors against a common benchmark index (**Nifty 50 / `^NSEI`**).
 
-### Formulas
+### 1. Weekly RRG Calculation (Unsmoothed)
 
 1. **Relative Strength ($\text{RS}$)**:
    $$\text{RS}_t = \frac{\text{Price}_{\text{sector}, t}}{\text{Price}_{\text{benchmark}, t}}$$
@@ -60,20 +76,71 @@ Relative Rotation Graphs (RRG), originally developed by Julius de Kempenaer (JdK
 3. **JdK RS-Momentum**:
    $$\text{RS-Momentum}_t = 100 + \text{z-score}_{14}\left(\frac{\text{RS-Ratio}_t - \text{RS-Ratio}_{t-1}}{\text{RS-Ratio}_{t-1}}\right)$$
 
+---
+
+### 2. Daily RRG Calculation (Causal EMA Smoothing)
+
+To reduce erratic day-to-day market noise while preserving responsiveness and avoiding lookahead bias:
+
+$$\text{Raw Daily Prices} \rightarrow \text{Daily RS} \xrightarrow{\mathbf{\text{20D EMA}}} \text{Smoothed RS} \xrightarrow{\text{14D Z-Score}} \text{Daily RS-Ratio} \xrightarrow{\text{14D Z-Score of ROC}} \text{Raw RS-Mom} \xrightarrow{\mathbf{\text{5D EMA}}} \mathbf{\text{Plotted Coordinates}}$$
+
+- **Causal EMA Formula**:
+  $$\alpha = \frac{2}{\text{period} + 1}$$
+  $$\text{EMA}_t = \alpha \cdot \text{value}_t + (1 - \alpha) \cdot \text{EMA}_{t-1}$$
+  - Relative Strength EMA Period: **20 trading days** ($\alpha = 2/21$)
+  - RS-Momentum EMA Period: **5 trading days** ($\alpha = 2/6$)
+- **Chronological Execution**: Calculated forward in time without future observations.
+- **Null Safety**: Invalid/pre-history entries cleanly reset EMA state without inventing zeroes or introducing lookahead bias.
+
+---
+
 ### Quadrant Classification (Centered at 100, 100)
+
 - **Leading (Green, Top-Right)**: $\text{RS-Ratio} \ge 100$ and $\text{RS-Momentum} \ge 100$ (Outperforming benchmark with positive momentum).
-- **Weakening (Yellow, Bottom-Right)**: $\text{RS-Ratio} \ge 100$ and $\text{RS-Momentum} < 100$ (Outperforming benchmark but losing momentum).
+- **Weakening (Orange, Bottom-Right)**: $\text{RS-Ratio} \ge 100$ and $\text{RS-Momentum} < 100$ (Outperforming benchmark but losing momentum).
 - **Lagging (Red, Bottom-Left)**: $\text{RS-Ratio} < 100$ and $\text{RS-Momentum} < 100$ (Underperforming benchmark with negative momentum).
 - **Improving (Blue, Top-Left)**: $\text{RS-Ratio} < 100$ and $\text{RS-Momentum} \ge 100$ (Underperforming benchmark but gaining momentum).
 
 ---
 
-## Next 1-Month Return Feature
+## Forward Return Metric
 
-The 4-week forward return metric measures the sector index's own standalone price return 4 weeks following the selected historical date:
+The forward return metric measures the sector index's standalone performance 4 periods (4 weeks or 4 days) into the future from the selected date:
 $$\text{Forward Return}_{t} = \frac{\text{Price}_{t+4} - \text{Price}_t}{\text{Price}_t}$$
 
-> **Disclaimer:** The forward 1-month return metric is strictly historical and descriptive of past performance; it is not predictive nor intended as a financial forecast.
+> **Disclaimer:** Forward returns are strictly historical and descriptive of past performance; they are not predictive nor intended as financial forecasts.
+
+---
+
+## API Documentation
+
+### `GET /api/rrg-data`
+
+Retrieves calculated RRG metrics for all sector indices.
+
+#### Query Parameters:
+- `interval` (optional): `1wk` (default, Weekly) or `1d` (Daily 1Y smoothed).
+- `refresh` (optional): Set `true` to force a cache refresh against Yahoo Finance.
+
+#### Response Structure:
+```json
+{
+  "timeframe": "Daily",
+  "interval": "1d",
+  "dates": ["2025-09-19", ..., "2026-08-11"],
+  "benchmark": "^NSEI",
+  "sectors": ["^CNXAUTO", "^NSEBANK", ...],
+  "metrics": {
+    "^NSEBANK": {
+      "sector": "^NSEBANK",
+      "rsRatio": [98.49, ...],
+      "rsMomentum": [100.63, ...],
+      "forward4wReturn": [0.0459, ...]
+    }
+  },
+  "updatedAt": "2026-08-11T19:41:48.000Z"
+}
+```
 
 ---
 
@@ -83,21 +150,22 @@ $$\text{Forward Return}_{t} = \frac{\text{Price}_{t+4} - \text{Price}_t}{\text{P
 rrg-indian-sectors-web/
 ├── worker/                  # Cloudflare Worker API & Math Engine
 │   ├── src/
-│   │   ├── index.ts         # Worker route handler & KV cache
+│   │   ├── index.ts         # Worker route handler & KV cache keys
 │   │   ├── fetcher.ts       # Yahoo Finance API parallel fetcher
-│   │   ├── rrg_engine.ts    # TypeScript engine matching pandas rolling z-score
-│   │   └── sectors.ts       # Empirically verified sector index ticker catalog
-│   ├── __tests__/           # Vitest unit tests
-│   └── wrangler.toml        # Cloudflare configuration
+│   │   ├── rrg_engine.ts    # TypeScript RRG engine (Weekly & Daily 20D/5D EMA)
+│   │   └── sectors.ts       # Alphabetically sorted sector index catalog
+│   ├── __tests__/           # Vitest unit test suite
+│   └── wrangler.toml        # Cloudflare Workers configuration
 ├── frontend/                # Cloudflare Pages React/Vite App
 │   ├── src/
-│   │   ├── components/      # Canvas chart, scrubber, detail panel
-│   │   ├── App.tsx          # Main React layout
-│   │   └── index.css        # Dark theme design system
+│   │   ├── components/      # Canvas chart, scrubber, detail panel, header
+│   │   ├── utils/           # CSV / Excel export generator
+│   │   ├── App.tsx          # Main React container
+│   │   └── index.css        # OLED dark theme design system
 ├── scripts/                 # Math precision verification tools
-│   ├── generate_ref_data.py # Reference Python computation exporter
-│   ├── verify_math.ts       # TS vs Python 12-decimal precision comparison
-│   └── test_sector_tickers.ts # Empirical Yahoo Finance ticker validator
+│   ├── generate_ref_data.py # Reference Python computation exporter (pandas.ewm)
+│   ├── verify_math.ts       # TS vs Python 11-decimal precision comparison
+│   └── test_sector_tickers.ts # Yahoo Finance ticker validator
 └── .github/workflows/       # Automated CI pipeline
     └── ci.yml
 ```
@@ -118,7 +186,7 @@ rrg-indian-sectors-web/
    npm run verify-math
    ```
 
-3. **Run Unit Tests**:
+3. **Run Unit Test Suite**:
    ```bash
    npm test
    ```
@@ -127,6 +195,12 @@ rrg-indian-sectors-web/
    ```bash
    cd frontend
    npm run dev
+   ```
+
+5. **Build Production Bundle**:
+   ```bash
+   cd frontend
+   npm run build
    ```
 
 ---
