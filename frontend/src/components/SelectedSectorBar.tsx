@@ -34,7 +34,7 @@ export const SelectedSectorBar: React.FC<Props> = ({
   if (!selectedSector) {
     return (
       <div
-        className="flex items-center h-9 px-4 rounded-lg text-[11px] font-mono text-slate-700 gap-2"
+        className="flex items-center h-9 px-4 rounded-lg text-[11px] font-mono text-slate-400 gap-2"
         style={{ border: "1px dashed rgba(255,255,255,0.05)", background: "var(--bg-surface)" }}
       >
         ↑ Click any sector on the chart or table to pin its metrics

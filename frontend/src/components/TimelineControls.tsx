@@ -131,12 +131,17 @@ export const TimelineControls: React.FC<TimelineControlsProps> = ({
             <button
               key={sec}
               onClick={() => onToggleSector(sec)}
-              className="pill"
+              className="pill transition-all duration-150"
               style={on ? {
-                background: `${color}1A`,
-                borderColor: `${color}55`,
+                background: `${color}22`,
+                borderColor: `${color}77`,
                 color,
-              } : { opacity: 0.4 }}
+                boxShadow: `0 0 10px ${color}22`,
+              } : {
+                background: "rgba(255, 255, 255, 0.03)",
+                borderColor: "rgba(255, 255, 255, 0.12)",
+                color: "#9CA3AF",
+              }}
             >
               {getSectorName(sec)}
             </button>
