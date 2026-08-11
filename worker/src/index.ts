@@ -7,27 +7,33 @@ export interface Env {
   ALLOWED_ORIGIN?: string;
 }
 
-const CACHE_KEY = "rrg_latest_metrics_v1";
+const CACHE_KEY_1WK = "rrg_latest_metrics_1wk_v2";
+const CACHE_KEY_1D  = "rrg_latest_metrics_1d_v2";
 const CACHE_TTL_SECONDS = 86400; // 24 hours KV TTL
 
-export async function computeAndCacheRrgData(env: Env) {
-  console.log("Computing fresh RRG data from Yahoo Finance...");
-  const fetchResult = await fetchAllPrices({ range: "5y", interval: "1wk" });
+export async function computeAndCacheRrgData(env: Env, interval: "1wk" | "1d" = "1wk") {
+  console.log(`Computing fresh RRG data (${interval}) from Yahoo Finance...`);
+  const range = interval === "1d" ? "1y" : "5y";
+  const fetchResult = await fetchAllPrices({ range, interval });
   const computed = computeRrgMetrics(fetchResult.dates, fetchResult.prices, DEFAULT_CONFIG);
 
   const payload = {
     ...computed,
+    timeframe: interval === "1d" ? "Daily" : "Weekly",
+    interval,
     fetchWarnings: fetchResult.warnings,
     updatedAt: new Date().toISOString(),
     cached: false,
   };
 
+  const cacheKey = interval === "1d" ? CACHE_KEY_1D : CACHE_KEY_1WK;
+
   if (env.RRG_CACHE) {
     try {
-      await env.RRG_CACHE.put(CACHE_KEY, JSON.stringify(payload), {
+      await env.RRG_CACHE.put(cacheKey, JSON.stringify(payload), {
         expirationTtl: CACHE_TTL_SECONDS,
       });
-      console.log("Updated Cloudflare KV Cache with fresh RRG data");
+      console.log(`Updated Cloudflare KV Cache for ${interval}`);
     } catch (e: any) {
       console.warn("Failed to write to Cloudflare KV Cache:", e.message);
     }
@@ -36,19 +42,21 @@ export async function computeAndCacheRrgData(env: Env) {
   return payload;
 }
 
-async function getOrComputeRrgData(env: Env, ctx?: any, forceRefresh: boolean = false) {
+async function getOrComputeRrgData(env: Env, ctx?: any, forceRefresh: boolean = false, interval: "1wk" | "1d" = "1wk") {
+  const cacheKey = interval === "1d" ? CACHE_KEY_1D : CACHE_KEY_1WK;
+
   if (!forceRefresh && env.RRG_CACHE) {
     try {
-      const cached = await env.RRG_CACHE.get(CACHE_KEY, "json");
+      const cached = await env.RRG_CACHE.get(cacheKey, "json");
       if (cached) {
         const ageMs = cached.updatedAt ? Date.now() - new Date(cached.updatedAt).getTime() : 0;
         const STALE_THRESHOLD_MS = 4 * 3600 * 1000;
 
         if (ageMs > STALE_THRESHOLD_MS && ctx && typeof ctx.waitUntil === "function") {
-          console.log("KV Cache entry is stale (> 4h). Triggering background update...");
-          ctx.waitUntil(computeAndCacheRrgData(env));
+          console.log(`KV Cache entry for ${interval} is stale (> 4h). Triggering background update...`);
+          ctx.waitUntil(computeAndCacheRrgData(env, interval));
         } else {
-          console.log("Serving fresh RRG data from Cloudflare KV Cache");
+          console.log(`Serving fresh RRG data (${interval}) from Cloudflare KV Cache`);
         }
 
         return { ...cached, cached: true };
@@ -58,7 +66,7 @@ async function getOrComputeRrgData(env: Env, ctx?: any, forceRefresh: boolean = 
     }
   }
 
-  return await computeAndCacheRrgData(env);
+  return await computeAndCacheRrgData(env, interval);
 }
 
 function getCorsHeaders(request: Request, env: Env) {
@@ -135,8 +143,11 @@ export default {
 
     if (url.pathname === "/api/rrg-data") {
       const forceRefresh = url.searchParams.get("refresh") === "true";
+      const intervalParam = url.searchParams.get("interval");
+      const interval: "1wk" | "1d" = intervalParam === "1d" ? "1d" : "1wk";
+
       try {
-        const data = await getOrComputeRrgData(env, ctx, forceRefresh);
+        const data = await getOrComputeRrgData(env, ctx, forceRefresh, interval);
         return new Response(JSON.stringify(data), { headers: corsHeaders });
       } catch (err: any) {
         return new Response(
@@ -153,6 +164,11 @@ export default {
   },
 
   async scheduled(event: any, env: Env, ctx: any): Promise<void> {
-    ctx.waitUntil(computeAndCacheRrgData(env));
+    ctx.waitUntil(
+      Promise.all([
+        computeAndCacheRrgData(env, "1wk"),
+        computeAndCacheRrgData(env, "1d"),
+      ])
+    );
   },
 };

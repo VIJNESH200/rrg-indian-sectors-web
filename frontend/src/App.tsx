@@ -14,24 +14,28 @@ export function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState<string | null>(null);
 
+  const [timeframe, setTimeframe]   = useState<"1wk" | "1d">("1wk");
   const [dateIdx, setDateIdx]       = useState(0);
   const [tailLength, setTailLength] = useState(8);
   const [selected, setSelected]     = useState<string | null>(null);
   const [hovered, setHovered]       = useState<string | null>(null);
   const [visible, setVisible]       = useState<Set<string>>(new Set());
 
-  const load = async (refresh = false) => {
+  const load = async (refresh = false, tf = timeframe) => {
     setLoading(true); setError(null);
     try {
       const BASE = "https://rrg-indian-sectors-api.rrg-indian-sectors.workers.dev/api/rrg-data";
       const api  = import.meta.env.VITE_API_URL || BASE;
-      const url  = refresh ? `${api}${api.includes("?") ? "&" : "?"}refresh=true` : api;
-      const r    = await fetch(url);
+      const paramSep = api.includes("?") ? "&" : "?";
+      let url = `${api}${paramSep}interval=${tf}`;
+      if (refresh) url += "&refresh=true";
+
+      const r = await fetch(url);
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const j: RrgResponseData = await r.json();
       setData(j);
-      if (j.dates?.length)   setDateIdx(j.dates.length - 1);
-      if (j.sectors?.length) {
+      if (j.dates?.length) setDateIdx(j.dates.length - 1);
+      if (j.sectors?.length && visible.size === 0) {
         const DEFAULT_OFF_SECTORS = new Set([
           "NIFTY_FIN_SERVICE.NS",
           "^CNXPSUBANK",
@@ -49,7 +53,13 @@ export function App() {
     }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(false, timeframe); }, []);
+
+  const handleTimeframeChange = (tf: "1wk" | "1d") => {
+    if (tf === timeframe) return;
+    setTimeframe(tf);
+    load(false, tf);
+  };
 
   const toggleSector = (s: string) =>
     setVisible(prev => { const n = new Set(prev); n.has(s) ? n.delete(s) : n.add(s); return n; });
@@ -59,7 +69,9 @@ export function App() {
     <div className="min-h-screen flex flex-col items-center justify-center gap-4"
          style={{ background: "var(--bg-root)" }}>
       <RefreshCw className="w-8 h-8 text-[#3B8BFF] animate-spin" />
-      <p className="text-[13px] font-mono text-slate-500">Loading sector data…</p>
+      <p className="text-[13px] font-mono text-slate-400 font-medium">
+        Loading {timeframe === "1d" ? "Daily (1Y)" : "Weekly"} RRG sector data…
+      </p>
     </div>
   );
 
@@ -74,7 +86,7 @@ export function App() {
           <p className="text-[12px] text-slate-500">{error}</p>
         </div>
         <button
-          onClick={() => load(true)}
+          onClick={() => load(true, timeframe)}
           className="pill active mt-1 px-4 py-1.5 text-[12px]"
           style={{ background: "var(--accent-dim)", borderColor: "rgba(59,139,255,0.4)", color: "var(--accent)" }}
         >
@@ -89,6 +101,8 @@ export function App() {
       {/* ── Header ── */}
       <Header
         latestDate={data.dates[dateIdx] ?? data.dates[data.dates.length - 1]}
+        timeframe={timeframe}
+        onTimeframeChange={handleTimeframeChange}
         onExportCSV={() => exportRrgDataToCSV(data)}
       />
 
@@ -144,7 +158,9 @@ export function App() {
         className="shrink-0 px-5 py-3 flex justify-between items-center text-[11px] text-slate-300 font-medium"
         style={{ borderTop: "1px solid var(--border)", maxWidth: 1440, margin: "0 auto", width: "100%" }}
       >
-        <span className="font-mono text-slate-400">RRG India · Weekly · Nifty 50 benchmark</span>
+        <span className="font-mono text-slate-400 font-medium">
+          RRG India · {timeframe === "1d" ? "Daily (1Y)" : "Weekly"} · Nifty 50 benchmark
+        </span>
         <span className="italic text-slate-300 font-medium hidden sm:block">
           Historical forward returns are descriptive, not predictive.
         </span>

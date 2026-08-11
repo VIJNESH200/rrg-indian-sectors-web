@@ -213,8 +213,12 @@ export function computeRrgMetrics(
     };
   }
 
-  // Filter out pre-history data points up to 2022-08-14 so every returned date has 100% valid non-null metrics
-  const cutIdx = dates.findIndex((d) => d > "2022-08-14");
+  // Filter out pre-history burn-in data points so every returned date has 100% valid non-null metrics
+  const firstSec = config.sectors[0];
+  const firstSecMetrics = metrics[firstSec];
+  const cutIdx = dates.findIndex((d, idx) => {
+    return firstSecMetrics && firstSecMetrics.rsRatio[idx] != null && firstSecMetrics.rsMomentum[idx] != null;
+  });
   const validCutIdx = cutIdx !== -1 ? cutIdx : 0;
 
   const slicedDates = dates.slice(validCutIdx);

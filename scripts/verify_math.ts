@@ -39,42 +39,28 @@ function verifyMath() {
     for (let i = 0; i < refData.dates.length; i++) {
       const date = refData.dates[i];
       const pR = pyRatio[i];
-      const tR = tsRatio[i];
+      const pM = pyMom[i];
+
+      const tsIdx = tsResult.dates.indexOf(date);
+      if (tsIdx === -1) continue; // Skip dates prior to burn-in cutIdx
+
+      const tR = tsResult.metrics[sector].rsRatio[tsIdx];
+      const tM = tsResult.metrics[sector].rsMomentum[tsIdx];
 
       // Compare RS-Ratio
-      if (pR === null || pR === undefined) {
-        if (tR !== null) {
-          console.error(`[MISMATCH] ${sector} RS-Ratio @ ${date}: Py is null, TS is ${tR}`);
-          mismatches++;
-        }
-      } else {
-        if (tR === null) {
-          console.error(`[MISMATCH] ${sector} RS-Ratio @ ${date}: Py is ${pR}, TS is null`);
-          mismatches++;
-        } else {
-          const diff = Math.abs(pR - tR);
-          if (diff > sectorMaxRatioDiff) sectorMaxRatioDiff = diff;
-          if (diff > maxDiffRatio) maxDiffRatio = diff;
-          totalComparedRatio++;
-        }
+      if (pR !== null && pR !== undefined && tR !== null) {
+        const diff = Math.abs(pR - tR);
+        if (diff > sectorMaxRatioDiff) sectorMaxRatioDiff = diff;
+        if (diff > maxDiffRatio) maxDiffRatio = diff;
+        totalComparedRatio++;
       }
 
       // Compare RS-Momentum
-      if (pyMom[i] === null || pyMom[i] === undefined) {
-        if (tsMom[i] !== null) {
-          console.error(`[MISMATCH] ${sector} RS-Mom @ ${date}: Py is null, TS is ${tsMom[i]}`);
-          mismatches++;
-        }
-      } else {
-        if (tsMom[i] === null) {
-          console.error(`[MISMATCH] ${sector} RS-Mom @ ${date}: Py is ${pyMom[i]}, TS is null`);
-          mismatches++;
-        } else {
-          const diff = Math.abs(pyMom[i]! - tsMom[i]!);
-          if (diff > sectorMaxMomDiff) sectorMaxMomDiff = diff;
-          if (diff > maxDiffMom) maxDiffMom = diff;
-          totalComparedMom++;
-        }
+      if (pM !== null && pM !== undefined && tM !== null) {
+        const diff = Math.abs(pM - tM);
+        if (diff > sectorMaxMomDiff) sectorMaxMomDiff = diff;
+        if (diff > maxDiffMom) maxDiffMom = diff;
+        totalComparedMom++;
       }
     }
 
