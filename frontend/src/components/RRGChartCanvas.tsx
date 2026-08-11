@@ -1,14 +1,16 @@
 import React, { useRef, useEffect, useState } from "react";
 import { RrgResponseData, QuadrantName } from "../types";
+import { getSectorName } from "../sectors";
 
 export interface RRGChartProps {
   data: RrgResponseData;
   selectedDateIndex: number;
   tailLength: number;
   visibleSectors: Set<string>;
-  onSelectSector?: (sector: string) => void;
-  hoveredSector?: string | null;
-  onHoverSector?: (sector: string | null) => void;
+  selectedSector: string | null;
+  onSelectSector: (sector: string | null) => void;
+  hoveredSector: string | null;
+  onHoverSector: (sector: string | null) => void;
 }
 
 const SECTOR_COLORS: Record<string, string> = {
@@ -21,7 +23,7 @@ const SECTOR_COLORS: Record<string, string> = {
   "NIFTY_FIN_SERVICE.NS": "#6366F1", // Indigo
   "^CNXMEDIA": "#F97316", // Orange
   "^CNXPSUBANK": "#14B8A6", // Teal
-  "NIFTY_PVT_BANK.NS": "#3A82F6", // Sapphire
+  "NIFTY_PVT_BANK.NS": "#3B82F6", // Sapphire
   "^CNXCONSUM": "#EAB308", // Yellow
   "^CNXENERGY": "#EF4444", // Red
   "^CNXREALTY": "#84CC16", // Lime
@@ -45,11 +47,24 @@ export function getQuadrant(ratio: number, mom: number): QuadrantName {
   return "Improving";
 }
 
+interface LabelBox {
+  sector: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  headX: number;
+  headY: number;
+  color: string;
+  labelText: string;
+}
+
 export const RRGChartCanvas: React.FC<RRGChartProps> = ({
   data,
   selectedDateIndex,
   tailLength,
   visibleSectors,
+  selectedSector,
   onSelectSector,
   hoveredSector,
   onHoverSector,
@@ -61,6 +76,7 @@ export const RRGChartCanvas: React.FC<RRGChartProps> = ({
     sector: string;
     ratio: number;
     mom: number;
+    fwdReturn: number | null;
     date: string;
     quadrant: QuadrantName;
   } | null>(null);
@@ -71,7 +87,7 @@ export const RRGChartCanvas: React.FC<RRGChartProps> = ({
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    // Canvas resolution setup
+    // Handle high DPI crisp canvas rendering
     const rect = canvas.getBoundingClientRect();
     const dpr = window.devicePixelRatio || 1;
     canvas.width = rect.width * dpr;
@@ -83,20 +99,20 @@ export const RRGChartCanvas: React.FC<RRGChartProps> = ({
 
     ctx.clearRect(0, 0, width, height);
 
-    // Padding for axes and labels
-    const padLeft = 60;
-    const padRight = 40;
-    const padTop = 40;
-    const padBottom = 50;
+    // Padding for axes & labels
+    const padLeft = 65;
+    const padRight = 50;
+    const padTop = 45;
+    const padBottom = 55;
 
     const plotW = width - padLeft - padRight;
     const plotH = height - padTop - padBottom;
 
-    // Collect range min/max across all visible sectors up to selectedDateIndex
-    let minX = 96;
-    let maxX = 104;
-    let minY = 96;
-    let maxY = 104;
+    // Compute dynamic chart axis bounds across visible sectors up to selectedDateIndex
+    let minX = 97;
+    let maxX = 103;
+    let minY = 97;
+    let maxY = 103;
 
     const startIdx = Math.max(0, selectedDateIndex - tailLength + 1);
 
@@ -119,7 +135,7 @@ export const RRGChartCanvas: React.FC<RRGChartProps> = ({
       }
     }
 
-    // Add padding around bounds
+    // Add padding margins to bounds
     const rangeX = Math.max(2, (maxX - minX) * 0.15);
     const rangeY = Math.max(2, (maxY - minY) * 0.15);
 
@@ -134,72 +150,77 @@ export const RRGChartCanvas: React.FC<RRGChartProps> = ({
     const cx100 = toCanvasX(100);
     const cy100 = toCanvasY(100);
 
-    // 1. Draw Quadrant Background Colors
-    // Top-Right: LEADING (Green)
-    ctx.fillStyle = "rgba(34, 197, 94, 0.07)";
+    // 1. QUADRANT BACKGROUNDS (Restrained, professional dark palette)
+    // Top-Right: LEADING (Subtle Green)
+    ctx.fillStyle = "rgba(34, 197, 94, 0.04)";
     ctx.fillRect(cx100, padTop, padLeft + plotW - cx100, cy100 - padTop);
 
-    // Bottom-Right: WEAKENING (Yellow)
-    ctx.fillStyle = "rgba(234, 179, 8, 0.07)";
+    // Bottom-Right: WEAKENING (Subtle Amber)
+    ctx.fillStyle = "rgba(245, 158, 11, 0.04)";
     ctx.fillRect(cx100, cy100, padLeft + plotW - cx100, padTop + plotH - cy100);
 
-    // Bottom-Left: LAGGING (Red)
-    ctx.fillStyle = "rgba(239, 68, 68, 0.07)";
+    // Bottom-Left: LAGGING (Subtle Red)
+    ctx.fillStyle = "rgba(239, 68, 68, 0.04)";
     ctx.fillRect(padLeft, cy100, cx100 - padLeft, padTop + plotH - cy100);
 
-    // Top-Left: IMPROVING (Blue)
-    ctx.fillStyle = "rgba(59, 130, 246, 0.07)";
+    // Top-Left: IMPROVING (Subtle Blue)
+    ctx.fillStyle = "rgba(59, 130, 246, 0.04)";
     ctx.fillRect(padLeft, padTop, cx100 - padLeft, cy100 - padTop);
 
-    // 2. Draw Quadrant Watermark Titles
-    ctx.font = "bold 16px Inter, sans-serif";
+    // 2. QUADRANT WATERMARKS
+    ctx.font = "700 14px Inter, sans-serif";
     ctx.textAlign = "right";
     ctx.textBaseline = "top";
 
-    ctx.fillStyle = "rgba(34, 197, 94, 0.3)";
+    ctx.fillStyle = "rgba(34, 197, 94, 0.25)";
     ctx.fillText("LEADING", padLeft + plotW - 15, padTop + 15);
 
     ctx.textBaseline = "bottom";
-    ctx.fillStyle = "rgba(234, 179, 8, 0.35)";
+    ctx.fillStyle = "rgba(245, 158, 11, 0.25)";
     ctx.fillText("WEAKENING", padLeft + plotW - 15, padTop + plotH - 15);
 
     ctx.textAlign = "left";
-    ctx.fillStyle = "rgba(239, 68, 68, 0.3)";
+    ctx.fillStyle = "rgba(239, 68, 68, 0.25)";
     ctx.fillText("LAGGING", padLeft + 15, padTop + plotH - 15);
 
     ctx.textBaseline = "top";
-    ctx.fillStyle = "rgba(59, 130, 246, 0.3)";
+    ctx.fillStyle = "rgba(59, 130, 246, 0.25)";
     ctx.fillText("IMPROVING", padLeft + 15, padTop + 15);
 
-    // 3. Draw Grid Lines & 100 Baselines
-    ctx.lineWidth = 1.2;
+    // 3. 100 BASELINE CROSS & GRID
+    ctx.lineWidth = 1;
     ctx.setLineDash([4, 4]);
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.25)";
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.18)";
 
-    // Vertical 100 line
+    // Vertical 100 Baseline
     ctx.beginPath();
     ctx.moveTo(cx100, padTop);
     ctx.lineTo(cx100, padTop + plotH);
     ctx.stroke();
 
-    // Horizontal 100 line
+    // Horizontal 100 Baseline
     ctx.beginPath();
     ctx.moveTo(padLeft, cy100);
     ctx.lineTo(padLeft + plotW, cy100);
     ctx.stroke();
 
-    ctx.setLineDash([]); // Reset dash
+    ctx.setLineDash([]); // Reset line dash
 
-    // Axis Ticks & Labels
-    ctx.font = "11px Inter, sans-serif";
-    ctx.fillStyle = "#9CA3AF";
+    // Outer plot frame
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
+    ctx.strokeRect(padLeft, padTop, plotW, plotH);
+
+    // Axis Ticks & Numbers
+    ctx.font = "11px 'JetBrains Mono', monospace";
+    ctx.fillStyle = "#6B7280";
     ctx.textAlign = "center";
+    ctx.textBaseline = "top";
 
     const stepX = (x1 - x0) / 6;
     for (let i = 0; i <= 6; i++) {
       const val = x0 + i * stepX;
       const x = toCanvasX(val);
-      ctx.fillText(val.toFixed(1), x, padTop + plotH + 18);
+      ctx.fillText(val.toFixed(1), x, padTop + plotH + 12);
     }
 
     ctx.textAlign = "right";
@@ -211,26 +232,31 @@ export const RRGChartCanvas: React.FC<RRGChartProps> = ({
       ctx.fillText(val.toFixed(1), padLeft - 10, y);
     }
 
-    // Axis titles
-    ctx.fillStyle = "#E5E7EB";
+    // Axis Labels
+    ctx.fillStyle = "#9CA3AF";
     ctx.font = "600 12px Inter, sans-serif";
     ctx.textAlign = "center";
-    ctx.fillText("JdK RS-Ratio (normalized, baseline 100)", padLeft + plotW / 2, height - 12);
+    ctx.textBaseline = "bottom";
+    ctx.fillText("RS-Ratio", padLeft + plotW / 2, height - 8);
 
     ctx.save();
-    ctx.translate(16, padTop + plotH / 2);
+    ctx.translate(18, padTop + plotH / 2);
     ctx.rotate(-Math.PI / 2);
-    ctx.fillText("JdK RS-Momentum (normalized, baseline 100)", 0, 0);
+    ctx.fillText("RS-Momentum", 0, 0);
     ctx.restore();
 
-    // 4. Draw Sector Trails & Dots
+    // 4. DRAW SECTOR TRAILS AND POINTS
+    const labelBoxes: LabelBox[] = [];
+
     data.sectors.forEach((sec, sIdx) => {
       if (!visibleSectors.has(sec)) return;
       const metrics = data.metrics[sec];
       if (!metrics) return;
 
       const baseColor = getSectorColor(sec, sIdx);
+      const isSelected = selectedSector === sec;
       const isHovered = hoveredSector === sec;
+      const isDimmed = (selectedSector !== null && !isSelected) || (hoveredSector !== null && !isHovered && !isSelected);
 
       const points: { x: number; y: number; ratio: number; mom: number; idx: number }[] = [];
 
@@ -252,14 +278,16 @@ export const RRGChartCanvas: React.FC<RRGChartProps> = ({
 
       const nPts = points.length;
 
-      // Draw fading trail lines
+      // Draw trail line
       if (nPts >= 2) {
         for (let i = 0; i < nPts - 1; i++) {
           const progress = (i + 1) / nPts;
-          const alpha = 0.15 + 0.85 * progress;
+          let alpha = 0.12 + 0.88 * progress;
+          if (isDimmed) alpha *= 0.2;
+
           ctx.strokeStyle = baseColor;
-          ctx.globalAlpha = isHovered ? Math.min(1, alpha * 1.3) : alpha;
-          ctx.lineWidth = isHovered ? 3.5 : 2;
+          ctx.globalAlpha = isSelected || isHovered ? Math.min(1, alpha * 1.4) : alpha;
+          ctx.lineWidth = isSelected || isHovered ? 3.5 : 2;
 
           ctx.beginPath();
           ctx.moveTo(points[i].x, points[i].y);
@@ -272,10 +300,12 @@ export const RRGChartCanvas: React.FC<RRGChartProps> = ({
       for (let i = 0; i < nPts; i++) {
         const isHead = i === nPts - 1;
         const progress = (i + 1) / nPts;
-        const alpha = isHead ? 1.0 : 0.2 + 0.7 * progress;
-        const radius = isHead ? (isHovered ? 9 : 7) : 3;
+        let alpha = isHead ? 1.0 : 0.15 + 0.7 * progress;
+        if (isDimmed && !isHead) alpha *= 0.2;
 
-        ctx.globalAlpha = alpha;
+        const radius = isHead ? (isSelected || isHovered ? 8 : 6) : 2.5;
+
+        ctx.globalAlpha = isDimmed ? 0.3 : alpha;
         ctx.fillStyle = baseColor;
         ctx.beginPath();
         ctx.arc(points[i].x, points[i].y, radius, 0, Math.PI * 2);
@@ -283,25 +313,169 @@ export const RRGChartCanvas: React.FC<RRGChartProps> = ({
 
         if (isHead) {
           ctx.strokeStyle = "#FFFFFF";
-          ctx.lineWidth = 2;
+          ctx.lineWidth = isSelected ? 2.5 : 1.5;
           ctx.stroke();
 
-          // Sector Label at Head
-          ctx.font = "bold 12px Inter, sans-serif";
-          ctx.fillStyle = baseColor;
-          ctx.textAlign = "left";
-          ctx.textBaseline = "middle";
+          // Prepare label for smart collision layout
+          const labelText = getSectorName(sec);
+          ctx.font = "600 11px Inter, sans-serif";
+          const textW = ctx.measureText(labelText).width;
+          const textH = 14;
 
-          const labelText = sec.replace("^", "").replace(".NS", "");
-          ctx.fillText(labelText, points[i].x + 12, points[i].y);
+          labelBoxes.push({
+            sector: sec,
+            x: points[i].x + 10,
+            y: points[i].y - textH / 2,
+            w: textW + 8,
+            h: textH + 4,
+            headX: points[i].x,
+            headY: points[i].y,
+            color: baseColor,
+            labelText,
+          });
         }
       }
 
       ctx.globalAlpha = 1.0;
     });
-  }, [data, selectedDateIndex, tailLength, visibleSectors, hoveredSector]);
 
-  // Mouse hover event for interactive tooltips
+    // 5. SMART LABEL COLLISION AVOIDANCE ALGORITHM (Requirement #9)
+    // Adjust label positions to prevent overlapping
+    for (let i = 0; i < labelBoxes.length; i++) {
+      const boxA = labelBoxes[i];
+      for (let j = i + 1; j < labelBoxes.length; j++) {
+        const boxB = labelBoxes[j];
+
+        // Check AABB collision
+        const collide =
+          boxA.x < boxB.x + boxB.w &&
+          boxA.x + boxA.w > boxB.x &&
+          boxA.y < boxB.y + boxB.h &&
+          boxA.y + boxA.h > boxB.y;
+
+        if (collide) {
+          // Reposition boxB vertically or left
+          if (boxB.headY >= boxA.headY) {
+            boxB.y = boxA.y + boxA.h + 4;
+          } else {
+            boxB.y = boxA.y - boxB.h - 4;
+          }
+        }
+      }
+    }
+
+    // Render resolved labels & leader lines
+    ctx.font = "600 11px Inter, sans-serif";
+    labelBoxes.forEach((box) => {
+      const isSelected = selectedSector === box.sector;
+      const isHovered = hoveredSector === box.sector;
+      const isDimmed = (selectedSector !== null && !isSelected) || (hoveredSector !== null && !isHovered && !isSelected);
+
+      ctx.globalAlpha = isDimmed ? 0.3 : 1.0;
+
+      // Draw leader line if offset is significant
+      const dist = Math.hypot(box.x - box.headX, box.y + box.h / 2 - box.headY);
+      if (dist > 16) {
+        ctx.strokeStyle = box.color;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(box.headX, box.headY);
+        ctx.lineTo(box.x, box.y + box.h / 2);
+        ctx.stroke();
+      }
+
+      // Draw label background pill for max contrast
+      ctx.fillStyle = isSelected ? "rgba(18, 23, 33, 0.95)" : "rgba(10, 13, 20, 0.85)";
+      ctx.fillRect(box.x - 2, box.y - 2, box.w, box.h);
+      ctx.strokeStyle = isSelected ? box.color : "rgba(255, 255, 255, 0.1)";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(box.x - 2, box.y - 2, box.w, box.h);
+
+      // Draw label text
+      ctx.fillStyle = isSelected ? "#FFFFFF" : box.color;
+      ctx.textAlign = "left";
+      ctx.textBaseline = "middle";
+      ctx.fillText(box.labelText, box.x + 2, box.y + box.h / 2 - 1);
+    });
+
+    ctx.globalAlpha = 1.0;
+  }, [data, selectedDateIndex, tailLength, visibleSectors, selectedSector, hoveredSector]);
+
+  // Canvas Click & Mousemove handlers
+  const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+
+    const padLeft = 65;
+    const padRight = 50;
+    const padTop = 45;
+    const padBottom = 55;
+
+    const plotW = rect.width - padLeft - padRight;
+    const plotH = rect.height - padTop - padBottom;
+
+    let minX = 97, maxX = 103, minY = 97, maxY = 103;
+    const startIdx = Math.max(0, selectedDateIndex - tailLength + 1);
+
+    for (const sec of data.sectors) {
+      if (!visibleSectors.has(sec)) continue;
+      const metrics = data.metrics[sec];
+      if (!metrics) continue;
+
+      for (let i = startIdx; i <= selectedDateIndex; i++) {
+        const r = metrics.rsRatio[i];
+        const m = metrics.rsMomentum[i];
+        if (r !== null && r !== undefined) {
+          if (r < minX) minX = r;
+          if (r > maxX) maxX = r;
+        }
+        if (m !== null && m !== undefined) {
+          if (m < minY) minY = m;
+          if (m > maxY) maxY = m;
+        }
+      }
+    }
+
+    const rangeX = Math.max(2, (maxX - minX) * 0.15);
+    const rangeY = Math.max(2, (maxY - minY) * 0.15);
+    const x0 = Math.min(95, minX - rangeX);
+    const x1 = Math.max(105, maxX + rangeX);
+    const y0 = Math.min(95, minY - rangeY);
+    const y1 = Math.max(105, maxY + rangeY);
+
+    const toCanvasX = (val: number) => padLeft + ((val - x0) / (x1 - x0)) * plotW;
+    const toCanvasY = (val: number) => padTop + (1 - (val - y0) / (y1 - y0)) * plotH;
+
+    let hitSector: string | null = null;
+    let minDist = 22;
+
+    for (const sec of data.sectors) {
+      if (!visibleSectors.has(sec)) continue;
+      const metrics = data.metrics[sec];
+      if (!metrics) continue;
+
+      const r = metrics.rsRatio[selectedDateIndex];
+      const m = metrics.rsMomentum[selectedDateIndex];
+
+      if (r !== null && r !== undefined && m !== null && m !== undefined) {
+        const cx = toCanvasX(r);
+        const cy = toCanvasY(m);
+        const dist = Math.hypot(mouseX - cx, mouseY - cy);
+
+        if (dist < minDist) {
+          minDist = dist;
+          hitSector = sec;
+        }
+      }
+    }
+
+    // REQUIREMENT #15: Clicking empty space clears selected sector
+    onSelectSector(hitSector);
+  };
+
   const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -309,16 +483,15 @@ export const RRGChartCanvas: React.FC<RRGChartProps> = ({
     const mouseX = e.clientX - rect.left;
     const mouseY = e.clientY - rect.top;
 
-    const padLeft = 60;
-    const padRight = 40;
-    const padTop = 40;
-    const padBottom = 50;
+    const padLeft = 65;
+    const padRight = 50;
+    const padTop = 45;
+    const padBottom = 55;
 
     const plotW = rect.width - padLeft - padRight;
     const plotH = rect.height - padTop - padBottom;
 
-    // Find nearest sector head point
-    let minX = 96, maxX = 104, minY = 96, maxY = 104;
+    let minX = 97, maxX = 103, minY = 97, maxY = 103;
     const startIdx = Math.max(0, selectedDateIndex - tailLength + 1);
 
     for (const sec of data.sectors) {
@@ -351,7 +524,7 @@ export const RRGChartCanvas: React.FC<RRGChartProps> = ({
     const toCanvasY = (val: number) => padTop + (1 - (val - y0) / (y1 - y0)) * plotH;
 
     let closest: any = null;
-    let minDist = 20; // 20px hit threshold
+    let minDist = 22;
 
     for (const sec of data.sectors) {
       if (!visibleSectors.has(sec)) continue;
@@ -360,6 +533,7 @@ export const RRGChartCanvas: React.FC<RRGChartProps> = ({
 
       const r = metrics.rsRatio[selectedDateIndex];
       const m = metrics.rsMomentum[selectedDateIndex];
+      const fwd = metrics.forward4wReturn[selectedDateIndex];
 
       if (r !== null && r !== undefined && m !== null && m !== undefined) {
         const cx = toCanvasX(r);
@@ -374,6 +548,7 @@ export const RRGChartCanvas: React.FC<RRGChartProps> = ({
             sector: sec,
             ratio: r,
             mom: m,
+            fwdReturn: fwd,
             date: data.dates[selectedDateIndex],
             quadrant: getQuadrant(r, m),
           };
@@ -383,55 +558,42 @@ export const RRGChartCanvas: React.FC<RRGChartProps> = ({
 
     if (closest) {
       setTooltip(closest);
-      onHoverSector?.(closest.sector);
+      onHoverSector(closest.sector);
     } else {
       setTooltip(null);
-      onHoverSector?.(null);
+      onHoverSector(null);
     }
   };
 
   return (
-    <div className="relative w-full h-[580px] glass-panel p-4 flex flex-col items-center justify-center">
+    <div className="relative w-full h-[620px] lg:h-[680px] panel p-2 flex flex-col items-center justify-center bg-[#121721] overflow-hidden">
       <canvas
         ref={canvasRef}
         className="w-full h-full cursor-pointer"
+        onClick={handleCanvasClick}
         onMouseMove={handleMouseMove}
         onMouseLeave={() => {
           setTooltip(null);
-          onHoverSector?.(null);
-        }}
-        onClick={() => {
-          if (tooltip && onSelectSector) {
-            onSelectSector(tooltip.sector);
-          }
+          onHoverSector(null);
         }}
       />
 
-      {/* Dynamic Hover Tooltip */}
+      {/* REQUIREMENT #11: Compact Polished Hover Tooltip */}
       {tooltip && (
         <div
-          className="absolute z-20 pointer-events-none bg-slate-900/95 border border-slate-700/80 rounded-lg p-3 shadow-xl backdrop-blur-md text-xs font-sans text-slate-100"
+          className="absolute z-30 pointer-events-none bg-[#0D1117]/95 border border-slate-700/80 rounded-md p-2.5 shadow-2xl backdrop-blur-md text-xs font-sans text-slate-100 min-w-[170px]"
           style={{
-            left: `${Math.min(tooltip.x + 15, 600)}px`,
-            top: `${Math.max(tooltip.y - 40, 20)}px`,
+            left: `${Math.min(tooltip.x + 12, 620)}px`,
+            top: `${Math.max(tooltip.y - 45, 15)}px`,
           }}
         >
           <div className="font-bold text-sm text-blue-400 mb-1">
-            {tooltip.sector.replace("^", "").replace(".NS", "")}
+            {getSectorName(tooltip.sector)}
           </div>
-          <div className="text-slate-400 mb-1">Date: {tooltip.date}</div>
-          <div className="flex items-center gap-2 font-mono my-0.5">
-            <span>RS-Ratio:</span>
-            <span className="font-semibold text-slate-200">{tooltip.ratio.toFixed(2)}</span>
-          </div>
-          <div className="flex items-center gap-2 font-mono my-0.5">
-            <span>RS-Momentum:</span>
-            <span className="font-semibold text-slate-200">{tooltip.mom.toFixed(2)}</span>
-          </div>
-          <div className="mt-1.5 pt-1.5 border-t border-slate-800 flex justify-between items-center gap-3">
-            <span className="text-slate-400">Quadrant:</span>
+          <div className="flex justify-between items-center mb-1.5 pb-1 border-b border-slate-800">
+            <span className="text-[10px] text-slate-400">Quadrant</span>
             <span
-              className={`font-semibold px-1.5 py-0.5 rounded text-[10px] uppercase ${
+              className={`badge ${
                 tooltip.quadrant === "Leading"
                   ? "badge-leading"
                   : tooltip.quadrant === "Weakening"
@@ -442,6 +604,30 @@ export const RRGChartCanvas: React.FC<RRGChartProps> = ({
               }`}
             >
               {tooltip.quadrant}
+            </span>
+          </div>
+          <div className="flex justify-between font-mono text-[11px] my-0.5">
+            <span className="text-slate-400">RS-Ratio:</span>
+            <span className="font-semibold text-slate-200">{tooltip.ratio.toFixed(2)}</span>
+          </div>
+          <div className="flex justify-between font-mono text-[11px] my-0.5">
+            <span className="text-slate-400">RS-Momentum:</span>
+            <span className="font-semibold text-slate-200">{tooltip.mom.toFixed(2)}</span>
+          </div>
+          <div className="flex justify-between font-mono text-[11px] mt-1 pt-1 border-t border-slate-800/80">
+            <span className="text-slate-400">4W Return:</span>
+            <span
+              className={`font-semibold ${
+                tooltip.fwdReturn === null || tooltip.fwdReturn === undefined
+                  ? "text-slate-500"
+                  : tooltip.fwdReturn >= 0
+                  ? "text-emerald-400"
+                  : "text-rose-400"
+              }`}
+            >
+              {tooltip.fwdReturn === null || tooltip.fwdReturn === undefined
+                ? "Pending"
+                : `${(tooltip.fwdReturn * 100).toFixed(2)}%`}
             </span>
           </div>
         </div>
