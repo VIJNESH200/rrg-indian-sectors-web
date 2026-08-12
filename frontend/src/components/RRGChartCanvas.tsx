@@ -299,18 +299,25 @@ export const RRGChartCanvas: React.FC<RRGChartProps> = ({
       ctx.globalAlpha = 1;
     });
 
-    /* ── 6. Collision-resolved labels ── */
+    /* ── 6. Collision-resolved & viewport-clamped labels ── */
+    for (let i = 0; i < labelBoxes.length; i++) {
+      const box = labelBoxes[i];
+      box.x = Math.max(PL + 2, Math.min(W - box.w - 4, box.x));
+      box.y = Math.max(PT + 2, Math.min(H - box.h - 4, box.y));
+    }
+
     for (let i = 0; i < labelBoxes.length; i++) {
       for (let j = i + 1; j < labelBoxes.length; j++) {
         const a = labelBoxes[i], b = labelBoxes[j];
         if (a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y) {
           if (b.headY >= a.headY) b.y = a.y + a.h + 3;
           else b.y = a.y - b.h - 3;
+          b.y = Math.max(PT + 2, Math.min(H - b.h - 4, b.y));
         }
       }
     }
 
-    ctx.font = "600 11px Inter, sans-serif";
+    ctx.font = isMobile ? "600 9.5px Inter, sans-serif" : "600 11px Inter, sans-serif";
     labelBoxes.forEach(({ sector, x, y, w, h, headX, headY, color, text, dimmed, selected }) => {
       ctx.globalAlpha = dimmed ? 0.28 : 1;
 
@@ -458,7 +465,21 @@ export const RRGChartCanvas: React.FC<RRGChartProps> = ({
     q === "Leading" ? "qbadge-leading" : q === "Weakening" ? "qbadge-weakening"
     : q === "Lagging" ? "qbadge-lagging" : "qbadge-improving";
 
-  const canvasWidth = canvasRef.current?.getBoundingClientRect().width || 360;
+  const canvasRect = canvasRef.current?.getBoundingClientRect();
+  const canvasWidth = canvasRect?.width || 360;
+  const canvasHeight = canvasRect?.height || 360;
+  const tooltipWidth = 180;
+  const tooltipHeight = 135;
+
+  const tooltipLeft = hoveredPoint
+    ? hoveredPoint.canvasX > canvasWidth * 0.58
+      ? Math.max(8, hoveredPoint.canvasX - tooltipWidth - 10)
+      : Math.min(hoveredPoint.canvasX + 10, canvasWidth - tooltipWidth - 8)
+    : 8;
+
+  const tooltipTop = hoveredPoint
+    ? Math.max(8, Math.min(hoveredPoint.canvasY - 10, canvasHeight - tooltipHeight - 8))
+    : 8;
 
   return (
     <div className="relative w-full h-[360px] sm:h-[clamp(420px,62vh,680px)]">
@@ -478,8 +499,8 @@ export const RRGChartCanvas: React.FC<RRGChartProps> = ({
         <div
           className="pointer-events-none absolute z-40"
           style={{
-            left: Math.min(hoveredPoint.canvasX + 8, Math.max(8, canvasWidth - 195)),
-            top: Math.max(hoveredPoint.canvasY - 10, 8),
+            left: tooltipLeft,
+            top: tooltipTop,
           }}
         >
           <div

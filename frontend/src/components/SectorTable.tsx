@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { RrgResponseData, QuadrantName } from "../types";
 import { getSectorName } from "../sectors";
 import { getQuadrant, getSectorColor } from "./RRGChartCanvas";
@@ -16,6 +16,35 @@ interface Props {
 export const SectorTable: React.FC<Props> = ({
   data, selectedDateIndex, visibleSectors, selectedSector, onSelectSector, timeframe = "1wk",
 }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [scrollPos, setScrollPos] = useState(0);
+  const [maxScroll, setMaxScroll] = useState(0);
+
+  const updateScrollState = () => {
+    if (!containerRef.current) return;
+    const { scrollLeft, scrollWidth, clientWidth } = containerRef.current;
+    setScrollPos(scrollLeft);
+    setMaxScroll(Math.max(0, scrollWidth - clientWidth));
+  };
+
+  useEffect(() => {
+    updateScrollState();
+    window.addEventListener("resize", updateScrollState);
+    return () => window.removeEventListener("resize", updateScrollState);
+  }, [data, visibleSectors]);
+
+  const handleScroll = () => {
+    updateScrollState();
+  };
+
+  const handleSliderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = Number(e.target.value);
+    setScrollPos(val);
+    if (containerRef.current) {
+      containerRef.current.scrollLeft = val;
+    }
+  };
+
   const rows = data.sectors
     .filter(s => visibleSectors.has(s))
     .map((sec, idx) => {
@@ -35,12 +64,22 @@ export const SectorTable: React.FC<Props> = ({
     : q === "Improving" ? "qbadge-improving" : "";
 
   return (
-    <div className="card overflow-hidden">
-      <div className="overflow-x-auto scrollbar-none">
+    <div className="card overflow-hidden flex flex-col">
+      <div
+        ref={containerRef}
+        onScroll={handleScroll}
+        className="overflow-x-auto scrollbar-none"
+        style={{ touchAction: "pan-x", WebkitOverflowScrolling: "touch" }}
+      >
         <table className="sec-table table-fixed w-full min-w-[540px]">
           <thead>
             <tr style={{ background: "var(--bg-raised)" }}>
-              <th className="w-[30%] text-left text-slate-300 px-4 py-2.5">SECTOR</th>
+              <th
+                className="w-[30%] text-left text-slate-300 px-4 py-2.5 sticky left-0 z-20 border-b"
+                style={{ background: "var(--bg-raised)", borderColor: "var(--border)" }}
+              >
+                SECTOR
+              </th>
               <th className="w-[18%] text-left text-slate-300 px-4 py-2.5">QUADRANT</th>
               <th className="w-[17%] text-right text-slate-300 px-4 py-2.5">RS-RATIO</th>
               <th className="w-[17%] text-right text-slate-300 px-4 py-2.5">RS-MOM</th>
@@ -61,11 +100,14 @@ export const SectorTable: React.FC<Props> = ({
                   onClick={() => onSelectSector(isSel ? null : sec)}
                   className={isSel ? "row-selected" : ""}
                 >
-                  {/* Sector name + colour dot */}
-                  <td className="w-[30%] text-left px-4 py-2.5">
+                  {/* Sector name + colour dot (Sticky Column) */}
+                  <td
+                    className="w-[30%] text-left px-4 py-2.5 sticky left-0 z-10"
+                    style={{ background: isSel ? "#131E30" : "var(--bg-surface)" }}
+                  >
                     <div className="flex items-center gap-2">
                       <span className="w-2.5 h-2.5 rounded-full shrink-0 shadow-sm" style={{ background: color }} />
-                      <span className="text-slate-100 font-semibold text-[12px]">
+                      <span className="text-slate-100 font-semibold text-[12px] truncate">
                         {getSectorName(sec)}
                       </span>
                     </div>
@@ -107,6 +149,21 @@ export const SectorTable: React.FC<Props> = ({
           </tbody>
         </table>
       </div>
+
+      {/* Synchronized horizontal scroll range slider for mobile */}
+      {maxScroll > 1 && (
+        <div className="flex items-center gap-2 px-3 py-1.5 border-t border-white/10 sm:hidden bg-[#14161B]">
+          <span className="stat-label text-[9px] shrink-0">Scroll</span>
+          <input
+            type="range"
+            min={0}
+            max={maxScroll}
+            value={scrollPos}
+            onChange={handleSliderChange}
+            className="flex-1 min-w-0"
+          />
+        </div>
+      )}
     </div>
   );
 };

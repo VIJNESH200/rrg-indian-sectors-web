@@ -21,17 +21,17 @@ export const Header: React.FC<HeaderProps> = ({
     <div className="flex items-center gap-1.5 sm:gap-2 text-[12px] sm:text-[13px]">
       <Activity className="w-3.5 h-3.5 text-[#3B8BFF] shrink-0" strokeWidth={2.5} />
       <h1 className="font-bold text-white tracking-tight text-[12px] sm:text-[13px] m-0 p-0 inline">RRG India</h1>
-      <span className="text-white/15 hidden md:inline">·</span>
-      <span className="text-slate-400 font-medium hidden md:inline">NSE Sector Rotation</span>
+      <span className="text-white/15 hidden sm:inline">·</span>
+      <span className="text-slate-400 font-medium hidden sm:inline">NSE Sector Rotation</span>
       <span className="text-white/15 hidden sm:inline">·</span>
       <span className="text-slate-400 font-medium hidden sm:inline">
         {timeframe === "1d" ? "Daily (1Y) · 20D Smooth" : "Weekly"}
       </span>
       {latestDate && (
-        <>
+        <span className="hidden sm:inline-flex items-center gap-1.5">
           <span className="text-white/15">·</span>
-          <span className="font-mono text-[11px] sm:text-[12px] text-slate-300 font-semibold shrink-0">{latestDate}</span>
-        </>
+          <span className="font-mono text-[12px] text-slate-300 font-semibold shrink-0">{latestDate}</span>
+        </span>
       )}
     </div>
 
@@ -66,12 +66,11 @@ export const Header: React.FC<HeaderProps> = ({
       {onExportCSV && (
         <button
           onClick={onExportCSV}
-          className="inline-flex items-center gap-1.5 px-2 sm:px-2.5 py-1 rounded text-[11px] font-semibold text-blue-400 bg-blue-500/10 border border-blue-500/30 hover:bg-blue-500/20 hover:border-blue-500/50 transition-all cursor-pointer shadow-sm"
+          className="inline-flex items-center justify-center p-1.5 sm:px-2.5 sm:py-1 rounded text-[11px] font-semibold text-blue-400 bg-blue-500/10 border border-blue-500/30 hover:bg-blue-500/20 hover:border-blue-500/50 transition-all cursor-pointer shadow-sm"
           title="Download RRG sector dataset as CSV/Excel"
         >
           <Download className="w-3.5 h-3.5" />
-          <span className="hidden sm:inline">Export CSV / Excel</span>
-          <span className="sm:hidden">Export</span>
+          <span className="hidden sm:inline ml-1.5">Export CSV / Excel</span>
         </button>
       )}
 
